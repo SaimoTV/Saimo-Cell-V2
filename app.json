@@ -1,0 +1,162 @@
+{
+  "expo": {
+    "name": "Saimo-TV",
+    "slug": "saimo-v2",
+    "version": "2.5.12",
+    "orientation": "default",
+    "icon": "./assets/images/saimo_tv_logo.png",
+    "scheme": "saimo",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/saimo_tv_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0F2A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.saimo.tv",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio",
+          "fetch",
+          "processing"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.saimo.tv.background-download"
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSPhotoLibraryAddUsageDescription": "Saimo TV salva seus downloads na Galeria para voc\u00ea assistir offline em outros apps.",
+        "NSPhotoLibraryUsageDescription": "Saimo TV organiza seus downloads em um \u00e1lbum na Galeria."
+      },
+      "buildNumber": "2.5.12"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/saimo_tv_logo.png",
+        "backgroundColor": "#0A0A0F"
+      },
+      "package": "com.saimo.tv",
+      "versionCode": 20512,
+      "permissions": [
+        "INTERNET",
+        "VIBRATE",
+        "REQUEST_INSTALL_PACKAGES",
+        "POST_NOTIFICATIONS",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_DATA_SYNC",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_IMAGES",
+        "android.permission.ACCESS_LOCAL_NETWORK",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/saimo_tv_logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "DEFAULT"
+        }
+      ],
+      "./plugins/withCleartextTraffic",
+      "./plugins/withAndroidDoH",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
+        }
+      ],
+      [
+        "react-native-google-cast",
+        {
+          "receiverAppId": "CC1AD845",
+          "androidPlayServicesCastFrameworkVersion": "22.3.1"
+        }
+      ],
+      "./plugins/withPictureInPicture",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#6366F1",
+          "androidMode": "default",
+          "androidCollapsedTitle": "Saimo TV"
+        }
+      ],
+      [
+        "react-native-video",
+        {
+          "enableNotificationControls": true,
+          "enableBackgroundAudio": true,
+          "androidExtensions": {
+            "useExoplayerHls": true,
+            "useExoplayerDash": true,
+            "useExoplayerSmoothStreaming": false
+          }
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 37,
+            "targetSdkVersion": 37,
+            "buildToolsVersion": "37.0.0",
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-dontwarn com.tencent.mmkv.MMKV"
+          },
+          "ios": {
+            "useFrameworks": "static",
+            "enableBitcode": false
+          }
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Saimo TV organiza seus downloads em um \u00e1lbum na Galeria.",
+          "savePhotosPermission": "Saimo TV salva seus downloads na Galeria para voc\u00ea assistir offline em outros apps.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      "expo-font",
+      "./plugins/withSaimoSigning",
+      "./plugins/withSaimoArquiteturas",
+      "expo-image",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0F2A",
+          "drawable": {
+            "icon": "./assets/abertura/splash-vazio.xml"
+          }
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "turboModules": true
+    },
+    "jsEngine": "hermes",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f3fbaea8-592a-456d-a312-0e9f2e0fc553"
+      }
+    }
+  }
+}
