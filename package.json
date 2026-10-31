@@ -18,7 +18,6 @@
     "@shopify/flash-list": "2.0.2",
     "expo": "^57.0.0",
     "expo-blur": "~57.0.3",
-    "expo-brightness": "~57.0.2",
     "expo-build-properties": "~57.0.22",
     "expo-constants": "~57.0.19",
     "expo-document-picker": "~57.0.3",

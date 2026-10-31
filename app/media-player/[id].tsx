@@ -30,7 +30,6 @@ import {
     STRATEGIES, resolveUrlViaGet, detectSourceType,
 } from '../../services/playerStrategies';
 import { getItemAPI } from '../../services/apiService';
-import * as Brightness from 'expo-brightness';
 import * as telemetria from '../../services/telemetria';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,23 +111,6 @@ function SeekRipple({ side, anim }: { side: 'left' | 'right'; anim: Animated.Val
                 </Text>
             </View>
         </Animated.View>
-    );
-}
-
-/** Vertical slider that shows volume or brightness feedback */
-function SidebarIndicator({
-    visible, icon, value,
-}: { visible: boolean; icon: string; value: number }) {
-    if (!visible) return null;
-    const pct = Math.round(value * 100);
-    return (
-        <View style={styles.sidebarIndicator}>
-            <Ionicons name={icon as any} size={20} color="#fff" />
-            <View style={styles.sidebarTrack}>
-                <View style={[styles.sidebarFill, { height: `${pct}%` as any }]} />
-            </View>
-            <Text style={styles.sidebarText}>{pct}%</Text>
-        </View>
     );
 }
 
@@ -598,7 +580,6 @@ export default function MediaPlayerScreen() {
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [buffered, setBuffered] = useState(0);
-    const [volume, setVolume] = useState(1);
     const [rate, setRate] = useState(1);
     const [resolution, setResolution] = useState<string | null>(null);
     const [isSeeking, setIsSeeking] = useState(false);
@@ -648,14 +629,11 @@ export default function MediaPlayerScreen() {
     const [showTextSheet, setShowTextSheet] = useState(false);
     const [showVideoSheet, setShowVideoSheet] = useState(false);
     const [showSourceSheet, setShowSourceSheet] = useState(false);
-    const brightnessRef = useRef<number>(1); // original brightness to restore
 
     // ── OSD state ──────────────────────────────────────────────────────────
     const [showOSD, setShowOSD] = useState(true);
     const [locked, setLocked] = useState(false);
     const [showSpeed, setShowSpeed] = useState(false);
-    const [showVolume, setShowVolume] = useState(false);
-    const [showBrightness, setShowBrightness] = useState(false);
     const osdAnim = useRef(new Animated.Value(1)).current;
 
     // ── Refs ───────────────────────────────────────────────────────────────
@@ -667,8 +645,7 @@ export default function MediaPlayerScreen() {
     const handleNextEpisodeRef = useRef<() => void>(() => {});
     const leftRippleAnim = useRef(new Animated.Value(0)).current;
     const rightRippleAnim = useRef(new Animated.Value(0)).current;
-    const gestureStartRef = useRef({ x: 0, y: 0, volume: 1 });
-    const sidebarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const gestureStartRef = useRef({ x: 0, y: 0 });
     const strategyIdxRef = useRef(0); // mirror for use inside callbacks
     const hasFetchedFreshUrl = useRef(false);
 
@@ -717,30 +694,17 @@ export default function MediaPlayerScreen() {
                 if (Platform.OS === 'android') {
                     await NavigationBar.setVisibilityAsync('hidden');
                 }
-                // Save current brightness so we can restore on exit
-                const { brightness } = await Brightness.getPermissionsAsync()
-                    .then(async (perm) => {
-                        if (perm.granted) {
-                            return { brightness: await Brightness.getBrightnessAsync() };
-                        }
-                        return { brightness: 1 };
-                    })
-                    .catch(() => ({ brightness: 1 }));
-                brightnessRef.current = brightness;
             } catch {}
         })();
         return () => {
             isMountedRef.current = false;
             if (osdTimerRef.current) clearTimeout(osdTimerRef.current);
             if (nextCountdownRef.current) clearInterval(nextCountdownRef.current);
-            if (sidebarTimerRef.current) clearTimeout(sidebarTimerRef.current);
             if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
             (async () => {
                 try {
                     await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
                     if (Platform.OS === 'android') await NavigationBar.setVisibilityAsync('visible');
-                    // Restore brightness
-                    await Brightness.setBrightnessAsync(brightnessRef.current).catch(() => {});
                 } catch {}
             })();
         };
@@ -1283,15 +1247,6 @@ export default function MediaPlayerScreen() {
         Animated.timing(anim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
     }, [leftRippleAnim, rightRippleAnim]);
 
-    const hideSidebar = useCallback(() => {
-        if (sidebarTimerRef.current) clearTimeout(sidebarTimerRef.current);
-        sidebarTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current) return;
-            setShowVolume(false);
-            setShowBrightness(false);
-        }, 1200);
-    }, []);
-
     const screenWidth = Dimensions.get('window').width;
 
     const screenHeight = Dimensions.get('window').height;
@@ -1300,47 +1255,18 @@ export default function MediaPlayerScreen() {
         // Don't claim touches in bottom 28% of screen — that's where the progress bar lives
         onStartShouldSetPanResponder: (e) =>
             !locked && e.nativeEvent.locationY < screenHeight * 0.72,
-        // Only steal VERTICAL moves (volume/brightness) — never steal horizontal (progress bar drag)
-        onMoveShouldSetPanResponder: (_e, gs) =>
-            !locked && Math.abs(gs.dy) > 12 && Math.abs(gs.dy) > Math.abs(gs.dx) * 1.5,
+        onMoveShouldSetPanResponder: () => false,
 
         onPanResponderGrant: (e) => {
             gestureStartRef.current = {
                 x: e.nativeEvent.locationX,
                 y: e.nativeEvent.locationY,
-                volume,
             };
-            // Capture current brightness at start of gesture
-            Brightness.getBrightnessAsync().then(b => {
-                gestureStartRef.current.volume = b; // recycling property for brightness
-            }).catch(() => {});
-        },
-
-        onPanResponderMove: (_e, gs) => {
-            const { x: startX } = gestureStartRef.current;
-            const isVertical = Math.abs(gs.dy) > Math.abs(gs.dx) * 1.5;
-            if (!isVertical) return;
-
-            const side = startX > screenWidth / 2 ? 'right' : 'left';
-            const delta = -gs.dy / (Dimensions.get('window').height * 0.6);
-
-            if (side === 'right') {
-                const newVol = Math.max(0, Math.min(1, gestureStartRef.current.volume + delta));
-                setVolume(newVol);
-                setShowVolume(true);
-                setShowBrightness(false);
-            } else {
-                // Brightness control (left side)
-                const newBright = Math.max(0, Math.min(1, gestureStartRef.current.volume + delta));
-                Brightness.setBrightnessAsync(newBright).catch(() => {});
-                setShowBrightness(true);
-                setShowVolume(false);
-            }
         },
 
         onPanResponderRelease: (_e, gs) => {
             const isTap = Math.abs(gs.dx) < 10 && Math.abs(gs.dy) < 10;
-            if (!isTap) { hideSidebar(); return; }
+            if (!isTap) return;
 
             // Double-tap detection
             const side = gestureStartRef.current.x > screenWidth / 2 ? 'right' : 'left';
@@ -1365,8 +1291,7 @@ export default function MediaPlayerScreen() {
             }
         },
 
-        onPanResponderTerminate: () => hideSidebar(),
-    }), [locked, volume, screenWidth, screenHeight, skipBy, fireRipple, revealOSD, hideOSD, showOSD, hideSidebar]);
+    }), [locked, screenWidth, screenHeight, skipBy, fireRipple, revealOSD, hideOSD, showOSD]);
 
     // ─────────────────────────────────────────────────────────────────────
     // Computed
@@ -1440,7 +1365,6 @@ export default function MediaPlayerScreen() {
                     resizeMode={resizeMode}
                     paused={paused}
                     rate={rate}
-                    volume={volume}
                     selectedAudioTrack={selectedAudio !== null ? { type: SelectedTrackType.INDEX, value: selectedAudio } : undefined}
                     textTracks={legendaExt && legendaUri
                         ? [{ title: legendaExt.rotulo, language: legendaExt.iso as ISO639_1, type: TextTrackType.SUBRIP, uri: legendaUri }]
@@ -1479,12 +1403,6 @@ export default function MediaPlayerScreen() {
                 {/* Seek ripples */}
                 <SeekRipple side="left" anim={leftRippleAnim} />
                 <SeekRipple side="right" anim={rightRippleAnim} />
-
-                {/* Volume indicator */}
-                <SidebarIndicator visible={showVolume} icon="volume-high" value={volume} />
-
-                {/* Brightness indicator (cosmetic) */}
-                <SidebarIndicator visible={showBrightness} icon="sunny" value={0.7} />
             </View>
 
             {/* Loading */}
@@ -2063,35 +1981,6 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '600',
         marginTop: 2,
-    },
-
-    // ── Sidebar indicator (volume/brightness)
-    sidebarIndicator: {
-        position: 'absolute',
-        right: 24,
-        top: '25%',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        borderRadius: 12,
-        padding: 10,
-        gap: 8,
-    },
-    sidebarTrack: {
-        width: 4,
-        height: 80,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 2,
-        justifyContent: 'flex-end',
-    },
-    sidebarFill: {
-        width: '100%',
-        backgroundColor: Colors.primary,
-        borderRadius: 2,
-    },
-    sidebarText: {
-        color: '#fff',
-        fontSize: 10,
-        fontWeight: '600',
     },
 
     // ── Overlays
