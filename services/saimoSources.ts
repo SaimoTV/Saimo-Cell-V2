@@ -226,7 +226,10 @@ export function parseChannelCatalog(text: string): Channel[] {
     } else if (field === 'categoria') {
       categoria = value;
     } else if (field === 'fonte') {
-      streams.push({ url: value });
+      const resolvedUrl = value.startsWith('curtitv://')
+        ? `https://saimo-tv.pages.dev/api/curtitv?stream=${value.slice(10)}`
+        : value;
+      streams.push({ url: resolvedUrl });
     } else if (field === 'nome' && streams.length) {
       streams[streams.length - 1].name = value;
     } else if (field === 'qualidade' && streams.length) {
