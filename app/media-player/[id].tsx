@@ -28,6 +28,8 @@ import { fontePreferida, lembrarFonte } from '../../utils/fontePreferida';
 import { openDownload } from '../../services/playDownload';
 import {
     STRATEGIES, resolveUrlViaGet, detectSourceType,
+    ehEnderecoDinamico,
+    resolverDinamica,
 } from '../../services/playerStrategies';
 import { getItemAPI } from '../../services/apiService';
 import * as telemetria from '../../services/telemetria';
@@ -1297,16 +1299,48 @@ export default function MediaPlayerScreen() {
     // Computed
     // ─────────────────────────────────────────────────────────────────────
 
+    // `/api/stream` vira o endereço final antes de chegar ao player. Endereço
+    // que não deu para resolver (rede, limite) segue como está.
+    const [naoResolvida, setNaoResolvida] = useState<string | null>(null);
+    useEffect(() => {
+        if (!resolvedUrl || isOffline || !ehEnderecoDinamico(resolvedUrl)) return;
+        let vivo = true;
+        const pedida = resolvedUrl;
+        resolverDinamica(pedida).then((destino) => {
+            if (!vivo || !isMountedRef.current) return;
+            if (destino === null) {
+                // Sem vídeo em provedor nenhum: próxima fonte, ou aviso claro.
+                const proxima = sourceIndexRef.current + 1;
+                if (proxima < playbackSources.length) {
+                    sourceIndexRef.current = proxima;
+                    setSelectedSource(proxima);
+                    setActiveUrl(playbackSources[proxima]);
+                    setResolvedUrl(playbackSources[proxima]);
+                    setVideoKey((k) => k + 1);
+                } else {
+                    setHasError(true);
+                    setIsLoading(false);
+                    setErrorMsg('Este título ainda não está disponível em nenhuma fonte. Tente de novo mais tarde.');
+                }
+                return;
+            }
+            if (destino === pedida) setNaoResolvida(pedida);
+            else setResolvedUrl(destino);
+        });
+        return () => { vivo = false; };
+    }, [resolvedUrl, isOffline, playbackSources]);
+    const esperandoDestino = !!resolvedUrl && !isOffline && ehEnderecoDinamico(resolvedUrl) && naoResolvida !== resolvedUrl;
+
     const sourceType = useMemo(() => detectSourceType(resolvedUrl ?? ''), [resolvedUrl]);
     const source = useMemo(() => {
-        if (!resolvedUrl) return undefined;
+        if (!resolvedUrl || esperandoDestino) return undefined;
         // Cabeçalho HTTP não faz sentido para um arquivo local, e mandar um
         // User-Agent junto de um `file://` é o tipo de coisa que varia de
         // versão para versão do ExoPlayer sem aviso nenhum.
         const s: any = { uri: resolvedUrl, headers: isOffline ? {} : (STRATEGIES[strategyIdx]?.headers ?? {}) };
         if (sourceType) s.type = sourceType;
         return s;
-    }, [resolvedUrl, strategyIdx, sourceType, isOffline]);
+    }, [resolvedUrl, strategyIdx, sourceType, isOffline, esperandoDestino]);
 
     const retryManual = useCallback(() => {
         strategyIdxRef.current = 0;

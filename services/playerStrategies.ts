@@ -27,6 +27,41 @@ export const STRATEGIES: VideoStrategy[] = [
     { label: 'VLC + Range', headers: { ...ACEITA, 'User-Agent': VLC_UA, 'Icy-MetaData': '0' } },
 ];
 
+/** `/api/stream` só escolhe o destino quando chamado e pode cair em HLS. */
+export function ehEnderecoDinamico(url: string): boolean {
+    return /^https?:\/\/[^/]+\/api\/stream\?/i.test(url);
+}
+
+/**
+ * Pergunta ao `/api/stream` (com `json=1`) o destino final. Sem isso o ExoPlayer
+ * tratava a playlist HLS como vídeo comum e acusava formato inválido. Destino
+ * embrulhado no proxy do site sai direto (o app abre http). Devolve `null`
+ * quando o servidor afirma (404) que não há vídeo em lugar nenhum, e a própria
+ * URL quando não deu para saber.
+ */
+export async function resolverDinamica(url: string, timeoutMs = 12000): Promise<string | null> {
+    if (!ehEnderecoDinamico(url)) return url;
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url + '&json=1', { signal: controller.signal });
+        if (res.status === 404) return null;
+        if (!res.ok) return url;
+        const destino = String((await res.json())?.url ?? '');
+        if (!destino) return url;
+        const proxy = destino.match(/\/api\/proxy\?(?:.*&)?url=([^&]+)/);
+        if (proxy) {
+            const dentro = decodeURIComponent(proxy[1]);
+            if (/^https?:\/\//.test(dentro)) return dentro;
+        }
+        return destino;
+    } catch {
+        return url;
+    } finally {
+        clearTimeout(t);
+    }
+}
+
 export async function resolveUrlViaGet(url: string, timeoutMs = 8000): Promise<string> {
     try {
         const controller = new AbortController();
