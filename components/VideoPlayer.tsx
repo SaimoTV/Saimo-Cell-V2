@@ -205,11 +205,7 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
   // o componente do vídeo comparar e reenviar a fonte a cada atualização.
   const fonteDoPlayer = useMemo(() => {
     const isDadinho = activeStream.url.includes('dadinhodetapioca.fun');
-    const isCurti = activeStream.url.startsWith('curtitv://') || activeStream.url.includes('/api/curtitv');
-    const curtiResolved = activeStream.url.startsWith('curtitv://')
-      ? `https://saimo-tv.pages.dev/api/curtitv?stream=${activeStream.url.replace('curtitv://', '')}`
-      : activeStream.url;
-    const uri = (isDadinho && resolvedDadinho) ? resolvedDadinho : curtiResolved;
+    const uri = (isDadinho && resolvedDadinho) ? resolvedDadinho : activeStream.url;
     const baseHeaders: Record<string, string> = {
       Accept: '*/*',
       ...(activeStream.headers ?? {}),
@@ -224,7 +220,7 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
       ? { ...baseHeaders, Referer: 'https://dadinhodetapioca.fun/', Origin: 'https://dadinhodetapioca.fun' }
       : baseHeaders;
     const cleanPath = uri.split('?')[0].toLowerCase();
-    const isHls = cleanPath.endsWith('.m3u8') || cleanPath.endsWith('.txt') || isDadinho || isCurti;
+    const isHls = cleanPath.endsWith('.m3u8') || cleanPath.endsWith('.txt') || isDadinho;
     return {
       uri,
       headers,
