@@ -216,6 +216,10 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
     if ((uri.includes('s25-cloudfront-net.lat') || uri.includes('cloudfront-net.lat')) && !baseHeaders.Referer) {
       baseHeaders.Referer = 'https://w7.embedtv.cc/';
     }
+    if (uri.includes('embedtvproxy.workers.dev') && !baseHeaders.Referer) {
+      baseHeaders.Referer = 'https://nexustvplay.bbroot.com/';
+      baseHeaders.Origin = 'https://nexustvplay.bbroot.com';
+    }
     const headers = isDadinho
       ? { ...baseHeaders, Referer: 'https://dadinhodetapioca.fun/', Origin: 'https://dadinhodetapioca.fun' }
       : baseHeaders;
