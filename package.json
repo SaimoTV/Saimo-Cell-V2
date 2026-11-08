@@ -1,7 +1,7 @@
 {
   "name": "saimo-v2",
   "main": "expo-router/entry",
-  "version": "2.6.7",
+  "version": "2.6.8",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
