@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Linking, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -9,7 +9,6 @@ import { router } from 'expo-router';
 
 /** Página de doação (Pix ou cripto, pela Deflow). */
 export const LINK_DOACAO = 'https://deflow.exchange/pt/qr/saimo-tv';
-const APOIADORES = 'https://saimo-tv.pages.dev/apoiadores.txt';
 const TURQUESA = '#4FE3D0';
 
 type NomeIcone = React.ComponentProps<typeof MaterialIcons>['name'];
@@ -22,28 +21,10 @@ const VANTAGENS: { icone: NomeIcone; titulo: string; texto: string }[] = [
 
 /**
  * Apoie o Saimo TV: por que doar, o botão que abre a página de doação, o QR
- * code (para quem prefere doar de outro aparelho), o link escrito e quem já
- * apoiou, a lista publicada pelo site.
+ * code (para quem prefere doar de outro aparelho) e o link escrito.
  */
 export default function Apoie() {
   const insets = useSafeAreaInsets();
-  const [apoiadores, setApoiadores] = useState<string[]>([]);
-
-  useEffect(() => {
-    let vivo = true;
-    fetch(APOIADORES)
-      .then((r) => (r.ok ? r.text() : ''))
-      .then((texto) => {
-        if (!vivo) return;
-        setApoiadores(texto.split('\n').map((l) => l.trim())
-          .filter((l) => l && !l.startsWith('#'))
-          .map((l) => l.split('\t')[0].trim())
-          .filter(Boolean)
-          .slice(0, 40));
-      })
-      .catch(() => {});
-    return () => { vivo = false; };
-  }, []);
 
   return (
     <ScrollView
@@ -97,16 +78,6 @@ export default function Apoie() {
         <Text style={styles.pix}>Pagamento seguro pela Deflow</Text>
       </View>
 
-      {apoiadores.length > 0 && (
-        <>
-          <Text style={styles.apoiadoresTitulo}>Quem já apoiou</Text>
-          <View style={styles.apoiadores}>
-            {apoiadores.map((nome) => (
-              <View key={nome} style={styles.apoiador}><Text style={styles.apoiadorTexto}>{nome}</Text></View>
-            ))}
-          </View>
-        </>
-      )}
     </ScrollView>
   );
 }
@@ -133,8 +104,4 @@ const styles = StyleSheet.create({
   qr: { width: 220, height: 220, marginTop: 12 },
   link: { color: '#0E7490', fontSize: 15, fontWeight: '700', marginTop: 12 },
   pix: { color: '#5B6475', fontSize: 12, marginTop: 4 },
-  apoiadoresTitulo: { color: '#C9D1E3', fontSize: 14, fontWeight: '600', marginTop: 24, marginBottom: 10 },
-  apoiadores: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  apoiador: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(79,227,208,0.12)' },
-  apoiadorTexto: { color: '#C7F5EF', fontSize: 13 },
 });
