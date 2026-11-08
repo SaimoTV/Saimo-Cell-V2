@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import BotaoApoie from '../../components/BotaoApoie';
 import {
   View,
   Text,
@@ -509,6 +510,7 @@ export default function MoviesScreen() {
             </Text>
           </View>
           <View style={styles.headerButtons}>
+            <BotaoApoie />
             <TouchableOpacity
               style={styles.headerButton}
               onPress={() => { if (showSearch) { clearSearch(); setShowSearch(false); } else setShowSearch(true); }}

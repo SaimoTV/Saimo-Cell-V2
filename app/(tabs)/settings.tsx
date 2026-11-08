@@ -1,4 +1,6 @@
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState, useCallback, useRef } from 'react';
 import { 
   View, 
@@ -186,6 +188,18 @@ export default function SettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Apoie: em destaque, antes de tudo */}
+        <TouchableOpacity onPress={() => router.push('/apoie' as any)} activeOpacity={0.85} accessibilityRole="button">
+          <LinearGradient colors={['#0FA89A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.apoie}>
+            <Ionicons name="heart" size={26} color="#FFFFFF" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.apoieTitulo}>Apoie o Saimo TV</Text>
+              <Text style={styles.apoieTexto}>Ajude a manter tudo grátis e sem anúncios</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+
         {/* Listas */}
         <Text style={styles.sectionTitle}>Listas</Text>
         <View style={styles.section}>
@@ -404,6 +418,9 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  apoie: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, marginBottom: 8 },
+  apoieTitulo: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  apoieTexto: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },
   container: {
     flex: 1,
     backgroundColor: Colors.background,

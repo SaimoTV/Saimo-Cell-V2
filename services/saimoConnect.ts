@@ -6,6 +6,9 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useConnectStore, initConnectStore, DiscoveredTv, TvState, PhoneAudioMode } from '../stores/connectStore';
 import { registrarPong, registrarPosicoes, limparSincronia } from './sincroniaTv';
+import { pacoteDeDados, aplicarDados } from './sincroniaDados';
+import { useMediaStore } from '../stores/mediaStore';
+import { useFavoritesStore } from '../stores/favoritesStore';
 
 const CONNECT_CHANNEL_ID = 'saimo-connect-channel';
 const CONNECT_NOTIF_ID = 'saimo-connect-ongoing';
@@ -161,6 +164,30 @@ class SaimoConnectService {
   private userExplicitlyDisconnected = false;
   private autoConnect = true;
   private lastActivity = Date.now();
+  /** Sincronia de progresso e favoritos com a TV (ver sincroniaDados). */
+  private aplicandoDados = false;
+  private envioDeDados: any = null;
+  private pararDeVigiarDados: (() => void) | null = null;
+
+  /** Manda progresso e favoritos daqui a pouco, juntando mudanças seguidas. */
+  private agendarDados(atrasoMs = 3000): void {
+    if (this.aplicandoDados) return;
+    clearTimeout(this.envioDeDados);
+    this.envioDeDados = setTimeout(() => {
+      if (useConnectStore.getState().status === 'connected') this.sendCommand(pacoteDeDados());
+    }, atrasoMs);
+  }
+
+  private vigiarDados(): void {
+    this.pararDeVigiarDados?.();
+    const a = useMediaStore.subscribe((novo, velho) => {
+      if (novo.watchHistory !== velho.watchHistory || novo.favorites !== velho.favorites) this.agendarDados(10000);
+    });
+    const b = useFavoritesStore.subscribe((novo, velho) => {
+      if (novo.favorites !== velho.favorites) this.agendarDados(1000);
+    });
+    this.pararDeVigiarDados = () => { a(); b(); clearTimeout(this.envioDeDados); };
+  }
   private initialized = false;
   // PIN já reenviado neste socket: evita laço se a TV recusar o código.
   private pinEnviado: string | null = null;
@@ -461,6 +488,8 @@ class SaimoConnectService {
       };
 
       ws.onclose = () => {
+        this.pararDeVigiarDados?.();
+        this.pararDeVigiarDados = null;
         if (this.ws === ws) {
           this.handleDisconnect();
         }
@@ -501,6 +530,15 @@ class SaimoConnectService {
         if (store.phoneAudioMode !== 'none') {
           this.sendCommand({ t: 'phoneAudio', src: store.phoneAudioMode });
         }
+        // Progresso e favoritos vão à TV assim que conecta, e depois a cada mudança.
+        this.sendCommand(pacoteDeDados());
+        this.vigiarDados();
+        break;
+      }
+      case 'dados': {
+        // O que veio da TV não volta para ela como se fosse mudança daqui.
+        this.aplicandoDados = true;
+        try { aplicarDados(msg); } finally { this.aplicandoDados = false; }
         break;
       }
       case 'pending': {

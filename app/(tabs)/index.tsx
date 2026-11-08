@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback, useState, useMemo } from 'react';
+import BotaoApoie from '../../components/BotaoApoie';
 import {
   View,
   Text,
@@ -149,6 +150,7 @@ export default function HomeScreen() {
             <Text style={styles.subtitle}>{plural(channels.length, 'canal', 'canais')}</Text>
           </View>
           <View style={styles.headerActions}>
+            <BotaoApoie />
             <CastAction onlyDialog style={styles.searchButton} />
             <TouchableOpacity
               style={styles.searchButton}

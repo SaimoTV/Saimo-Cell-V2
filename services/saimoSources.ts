@@ -62,7 +62,7 @@ export const ORDEM_CATEGORIAS = [
 /** Seção de canal sem `categoria:` no catálogo (nenhuma regra pelo nome). */
 export const CATEGORIA_PADRAO = 'Outros';
 
-function channelId(name: string): string {
+export function channelId(name: string): string {
   return `remote-${slug(name)}`;
 }
 
