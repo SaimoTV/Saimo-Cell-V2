@@ -2,7 +2,7 @@
   "expo": {
     "name": "Saimo-TV",
     "slug": "saimo-v2",
-    "version": "2.6.10",
+    "version": "2.7.0",
     "orientation": "default",
     "icon": "./assets/images/saimo_tv_logo.png",
     "scheme": "saimo",
@@ -31,7 +31,7 @@
         "NSPhotoLibraryAddUsageDescription": "Saimo TV salva seus downloads na Galeria para voc\u00ea assistir offline em outros apps.",
         "NSPhotoLibraryUsageDescription": "Saimo TV organiza seus downloads em um \u00e1lbum na Galeria."
       },
-      "buildNumber": "2.6.10"
+      "buildNumber": "2.7.0"
     },
     "android": {
       "adaptiveIcon": {
@@ -39,7 +39,7 @@
         "backgroundColor": "#0A0A0F"
       },
       "package": "com.saimo.tv",
-      "versionCode": 20610,
+      "versionCode": 20700,
       "permissions": [
         "INTERNET",
         "VIBRATE",
