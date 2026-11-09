@@ -533,6 +533,13 @@ function seriesItems(text: string, letter: string): MediaItem[] {
   return result;
 }
 
+/** "I&#039;m" vira "I'm": alguns nomes vêm do site de origem com entidades HTML. */
+function semEntidades(texto: string): string {
+  return texto
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+}
+
 /** Animes e doramas publicados com os episódios no próprio arquivo. */
 export async function loadVodCollection(
   kind: 'animes' | 'doramas',
@@ -549,13 +556,13 @@ export async function loadVodCollection(
       if (!title.trim()) { current = null; continue; }
       current = {
         id: makeVodId('series', `redeflix-${kind}`, title.trim(), year.trim()),
-        name: title.trim(),
+        name: semEntidades(title.trim()),
         url: '',
         category: kind,
         categoryLabel: kind === 'animes' ? 'Animes' : 'Doramas',
         type: 'tv',
         isAdult: false,
-        tmdb: { ...basicTmdb(title.trim(), year.trim()), id: Number(tmdbId) || 0 },
+        tmdb: { ...basicTmdb(semEntidades(title.trim()), year.trim()), id: Number(tmdbId) || 0 },
         episodes: {},
       };
       result.push(current);
@@ -921,4 +928,45 @@ export async function filmografiaNoAcervo(
     saida.push(capa ? { ...item, tmdb: { ...item.tmdb!, poster: capa } } : item);
   }
   return saida;
+}
+
+
+// ===== Detalhes (filtros de Filmes & Séries) =====
+
+/** Ano, nota (0 a 10), idade (0 = Livre, -1 = não informada) e popularidade. */
+export interface DetalheDoTitulo { ano: number; nota: number; idade: number; popularidade: number }
+
+let detalhesEmMemoria: Map<string, DetalheDoTitulo> | null = null;
+let detalhesPedido: Promise<Map<string, DetalheDoTitulo>> | null = null;
+
+/** detalhes.txt (gerar_detalhes.py, do TMDB), lido uma vez. Chave "m|título" ou "s|título". */
+export function carregarDetalhes(): Promise<Map<string, DetalheDoTitulo>> {
+  if (detalhesEmMemoria) return Promise.resolve(detalhesEmMemoria);
+  if (detalhesPedido) return detalhesPedido;
+  detalhesPedido = textoFilmes('detalhes.txt', 'vod-detalhes.txt', false)
+    .then((texto) => {
+      const mapa = new Map<string, DetalheDoTitulo>();
+      for (const linha of texto.split(/\r?\n/)) {
+        if (!linha || linha.startsWith('#')) continue;
+        const c = linha.split('\t');
+        if (c.length < 6) continue;
+        const idade = c[4] === 'L' ? 0 : c[4] ? Number(c[4]) : -1;
+        mapa.set(`${c[0] === 's' ? 's' : 'm'}|${c[1]}`, {
+          ano: Number(c[2]) || 0, nota: Number(c[3]) || 0,
+          idade: Number.isFinite(idade) ? idade : -1, popularidade: Number(c[5]) || 0,
+        });
+      }
+      detalhesEmMemoria = mapa;
+      return mapa;
+    })
+    .catch(() => new Map<string, DetalheDoTitulo>())
+    .finally(() => { detalhesPedido = null; });
+  return detalhesPedido;
+}
+
+export function detalheDe(item: MediaItem): DetalheDoTitulo | undefined {
+  const v = parseVodId(item.id);
+  if (!v || !detalhesEmMemoria) return undefined;
+  const k = v.type === 'series' ? 's|' : 'm|';
+  return detalhesEmMemoria.get(k + v.title) || detalhesEmMemoria.get(k + v.title.replace(/\s*\(\d{4}\)\s*$/, ''));
 }

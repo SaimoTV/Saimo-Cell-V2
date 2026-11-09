@@ -86,6 +86,12 @@ nem o endereço.
 - **Pular abertura e créditos** com os tempos do
   [TheIntroDB](https://theintrodb.org) (`services/pulos.ts`), e cartão do
   próximo episódio quando os créditos começam
+- **Filtros na aba de filmes** (botão de ajustes no alto): Todos, Filmes,
+  Séries, Animes e Doramas; ano, idade (classificação indicativa), nota mínima e
+  ordem (populares, mais bem avaliados, mais novos, A a Z), sobre o acervo
+  inteiro. Dados do `detalhes.txt` do catálogo (`carregarDetalhes` em
+  `services/saimoSources.ts`); a lista filtrada fica guardada entre as páginas e
+  só a resposta do último filtro escolhido entra na tela.
 - **Continuar assistindo** na aba de filmes, e um banner do primeiro destaque
   no topo: com trailer direto no catálogo (MP4/HLS) ele toca sem som depois
   de 5 s, e a ficha abre se o trailer tocou e a aba ficou na frente por mais

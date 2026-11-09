@@ -2,7 +2,7 @@
 import type { MediaItem } from '../types';
 import {
   clearSaimoSourceCache, getVodItem, loadVodCategory, loadVodIndex,
-  loadVodCollection, parseVodId, searchVod,
+  loadVodCollection, parseVodId, searchVod, carregarDetalhes, detalheDe,
 } from './saimoSources';
 
 export interface APICategories {
@@ -59,23 +59,66 @@ export async function getHome(params: { p_items_per_category?: number; p_is_adul
 
 export async function getCatalog(params: {
   p_page?: number; p_per_page?: number; p_type?: 'movie' | 'series';
-  p_category?: string; p_search?: string; p_order_by?: 'rating' | 'new' | 'name';
+  p_category?: string; p_search?: string; p_order_by?: 'rating' | 'new' | 'name' | 'popular';
   p_is_adult?: boolean;
+  /** Filtros: gênero, faixa de anos, idade máxima (0 = Livre) e nota mínima. */
+  p_genero?: string; p_anos?: [number, number]; p_idade?: number; p_nota?: number;
 }): Promise<CatalogResult> {
   const page = Math.max(1, params.p_page ?? 1);
   const perPage = Math.max(1, params.p_per_page ?? PAGE_SIZE);
-  let items: MediaItem[];
-  if (params.p_search?.trim()) items = await searchVod(params.p_search, params.p_type);
-  else if (params.p_category && categoryParts(params.p_category)) items = await loadCategoryInternal(params.p_category);
-  else items = await searchVod('', params.p_type);
-
-  if (params.p_order_by === 'name') items = [...items].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  else if (params.p_order_by === 'new') items = [...items].sort((a, b) => (b.tmdb?.year || '').localeCompare(a.tmdb?.year || ''));
+  // A lista filtrada e ordenada fica guardada: a página 2, 3... só corta.
+  const { p_page: _p, p_per_page: _pp, ...resto } = params;
+  const chave = JSON.stringify(resto);
+  // Vale por dois minutos: o acervo pode ter sido atualizado nesse meio-tempo.
+  const guardado = ultimoCatalogo && ultimoCatalogo.chave === chave && Date.now() - ultimoCatalogo.em < 120_000;
+  const items = guardado && ultimoCatalogo ? ultimoCatalogo.items : await montarCatalogo(params);
+  if (!guardado) ultimoCatalogo = { chave, items, em: Date.now() };
   const total = items.length;
   return {
     items: items.slice((page - 1) * perPage, page * perPage), total, page,
     totalPages: Math.max(1, Math.ceil(total / perPage)),
   };
+}
+
+let ultimoCatalogo: { chave: string; items: MediaItem[]; em: number } | null = null;
+
+/** Ordena por uma chave calculada uma vez por título (e não a cada comparação). */
+function ordenarPor<T extends number | string>(items: MediaItem[], chave: (i: MediaItem) => T, desc: boolean): MediaItem[] {
+  const comChave = items.map((item, i) => ({ item, k: chave(item), i }));
+  comChave.sort((a, b) => (a.k === b.k ? a.i - b.i : (a.k < b.k) !== desc ? -1 : 1));
+  return comChave.map((x) => x.item);
+}
+
+async function montarCatalogo(params: Parameters<typeof getCatalog>[0]): Promise<MediaItem[]> {
+  const filtra = !!(params.p_genero || params.p_anos || params.p_idade !== undefined || params.p_nota);
+  const precisaDetalhes = filtra || params.p_order_by === 'rating' || params.p_order_by === 'popular' || params.p_order_by === 'new';
+  // Filtrando, ordenando ou navegando sem texto, o acervo inteiro entra (sem o
+  // corte de 500 da busca): senão "até 12 anos" sairia só dos primeiros títulos.
+  const limite = precisaDetalhes || !params.p_search?.trim() ? Number.MAX_SAFE_INTEGER : undefined;
+  let items: MediaItem[];
+  if (params.p_search?.trim()) items = await searchVod(params.p_search, params.p_type, limite);
+  else if (params.p_category === 'animes' || params.p_category === 'doramas'
+    || (params.p_category && categoryParts(params.p_category))) items = await loadCategoryInternal(params.p_category);
+  else items = await searchVod('', params.p_type, limite);
+
+  if (precisaDetalhes) await carregarDetalhes();
+  const anoDe = (i: MediaItem) => detalheDe(i)?.ano || Number(i.tmdb?.year) || 0;
+  if (filtra) {
+    items = items.filter((i) => {
+      if (params.p_genero && !(i.tmdb?.genres || []).includes(params.p_genero)) return false;
+      const d = detalheDe(i);
+      if (params.p_anos) { const a = anoDe(i); if (a < params.p_anos[0] || a > params.p_anos[1]) return false; }
+      if (params.p_idade !== undefined && !(d && d.idade >= 0 && d.idade <= params.p_idade)) return false;
+      if (params.p_nota && !(d && d.nota >= params.p_nota)) return false;
+      return true;
+    });
+  }
+  if (params.p_order_by === 'name') {
+    items = ordenarPor(items, (i) => i.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(), false);
+  } else if (params.p_order_by === 'new') items = ordenarPor(items, anoDe, true);
+  else if (params.p_order_by === 'rating') items = ordenarPor(items, (i) => detalheDe(i)?.nota || 0, true);
+  else if (params.p_order_by === 'popular') items = ordenarPor(items, (i) => detalheDe(i)?.popularidade || 0, true);
+  return items;
 }
 
 export function invalidateItemCache(id: string): void { ITEM_CACHE.delete(id); }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { carregarDetalhes } from '../../services/saimoSources';
 import BotaoApoie from '../../components/BotaoApoie';
 import {
   View,
@@ -58,8 +59,11 @@ function isAdultContent(item: MediaItem): boolean {
   return false;
 }
 
-function mapSortToAPI(sort: string): 'new' | 'name' {
-  return sort === 'year' ? 'new' : 'name';
+function mapSortToAPI(sort: string): 'new' | 'name' | 'rating' | 'popular' {
+  if (sort === 'year') return 'new';
+  if (sort === 'rating') return 'rating';
+  if (sort === 'popularity') return 'popular';
+  return 'name';
 }
 
 const SEARCH_DEBOUNCE = 600;
@@ -127,10 +131,21 @@ export default function MoviesScreen() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  // Filtros de ano, idade e nota (detalhes.txt); só aparecem quando ele carregou.
+  const [anos, setAnos] = useState<[number, number] | null>(null);
+  const [idade, setIdade] = useState<number | null>(null);
+  const [nota, setNota] = useState(0);
+  const [comDetalhes, setComDetalhes] = useState(false);
+  useEffect(() => {
+    carregarDetalhes().then((m) => { if (mountedRef.current) setComDetalhes(m.size > 0); });
+  }, []);
 
   const [catalogResults, setCatalogResults] = useState<MediaItem[]>([]);
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogTotalPages, setCatalogTotalPages] = useState(1);
+  // Quantos títulos o filtro achou ao todo (a grade carrega de página em página).
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const pedidoDoCatalogo = useRef(0);
   const [catalogLoading, setCatalogLoading] = useState(false);
 
   // Só os filtros: com a store inteira, a tela de Filmes (montada atrás do
@@ -246,6 +261,9 @@ export default function MoviesScreen() {
   }, [loading, loadTrending, linkFilmes]);
 
   const loadCatalogFiltered = useCallback(async (page: number) => {
+    // Trocar de filtro rápido dispara vários pedidos; só o último vale (uma
+    // resposta atrasada não pode pôr na tela o resultado do filtro anterior).
+    const pedido = ++pedidoDoCatalogo.current;
     setCatalogLoading(true);
     const params: Parameters<typeof getCatalog>[0] = {
       p_page: page,
@@ -255,7 +273,12 @@ export default function MoviesScreen() {
     if (debouncedQuery.trim()) params.p_search = debouncedQuery.trim();
     if (activeFilter === 'movie') params.p_type = 'movie';
     else if (activeFilter === 'tv') params.p_type = 'series';
-    if (activeGenre) params.p_category = activeGenre;
+    if (activeGenre) { params.p_category = activeGenre; params.p_genero = activeGenre; }
+    // Animes e doramas: a coleção inteira, e os outros filtros por cima dela.
+    if (activeFilter === 'animes' || activeFilter === 'doramas') params.p_category = activeFilter;
+    if (anos) params.p_anos = anos;
+    if (idade !== null) params.p_idade = idade;
+    if (nota) params.p_nota = nota;
 
     try {
       const result = await getCatalog(params);
@@ -267,25 +290,26 @@ export default function MoviesScreen() {
       if (page === 1 && !items.length && params.p_search && !params.p_type && !params.p_category) {
         telemetria.buscou('vod', params.p_search, () => false);
       }
-      if (mountedRef.current) {
+      if (mountedRef.current && pedido === pedidoDoCatalogo.current) {
         if (page === 1) setCatalogResults(items);
         else setCatalogResults(prev => deduplicateByName([...prev, ...items]));
         setCatalogPage(page);
         setCatalogTotalPages(result.totalPages);
+        if (page === 1) setCatalogTotal(result.total);
       }
     } catch (e) {
       console.warn('[Movies] loadCatalogFiltered erro:', e);
     } finally {
-      if (mountedRef.current) setCatalogLoading(false);
+      if (mountedRef.current && pedido === pedidoDoCatalogo.current) setCatalogLoading(false);
     }
-  }, [debouncedQuery, activeFilter, activeSort, activeGenre, adultUnlocked]);
+  }, [debouncedQuery, activeFilter, activeSort, activeGenre, adultUnlocked, anos, idade, nota]);
 
   useEffect(() => {
-    if (debouncedQuery.trim() || activeFilter !== 'all' || activeGenre) {
+    if (debouncedQuery.trim() || activeFilter !== 'all' || activeGenre || anos || idade !== null || nota) {
       loadCatalogFiltered(1);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, activeFilter, activeSort, activeGenre]);
+  }, [debouncedQuery, activeFilter, activeSort, activeGenre, anos, idade, nota]);
 
   const loadMoreCatalog = useCallback(() => {
     if (catalogLoading || catalogPage >= catalogTotalPages) return;
@@ -360,7 +384,7 @@ export default function MoviesScreen() {
 
   const genres = useMemo(() => getAllGenres(allItems), [allItems]);
 
-  const showGrid = !!(debouncedQuery.trim() || activeFilter !== 'all' || activeGenre);
+  const showGrid = !!(debouncedQuery.trim() || activeFilter !== 'all' || activeGenre || anos || idade !== null || nota);
   const gridData = showGrid ? catalogResults : [];
 
   const renderCategoryRow = useCallback(({ item }: { item: CategoryRowData }) => (
@@ -553,6 +577,7 @@ export default function MoviesScreen() {
 
       {showFilters && (
         <FilterBar
+          comColecoes
           activeFilter={activeFilter}
           activeSort={activeSort}
           activeGenre={activeGenre}
@@ -560,7 +585,14 @@ export default function MoviesScreen() {
           onFilterChange={setFilter}
           onSortChange={setSort}
           onGenreChange={setGenre}
-          onClear={clearFilters}
+          onClear={() => { clearFilters(); setAnos(null); setIdade(null); setNota(0); }}
+          comDetalhes={comDetalhes}
+          anos={anos}
+          idade={idade}
+          nota={nota}
+          onAnosChange={setAnos}
+          onIdadeChange={setIdade}
+          onNotaChange={setNota}
         />
       )}
 
@@ -584,7 +616,7 @@ export default function MoviesScreen() {
                 <Text style={styles.resultsText}>Buscando...</Text>
               </View>
             ) : (
-              <Text style={styles.resultsText}>{gridData.length} resultado{gridData.length !== 1 ? 's' : ''}</Text>
+              <Text style={styles.resultsText}>{Math.max(catalogTotal, gridData.length).toLocaleString('pt-BR')} {Math.max(catalogTotal, gridData.length) === 1 ? 'título' : 'títulos'}</Text>
             )
           }
           ListFooterComponent={ListFooter}

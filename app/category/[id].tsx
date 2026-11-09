@@ -64,7 +64,7 @@ export default function CategoryScreen() {
   const filteredItems = useMemo(() => {
     let result = allItems;
     
-    if (activeFilter !== 'all') {
+    if (activeFilter === 'movie' || activeFilter === 'tv') {
       result = filterMedia(result, activeFilter);
     }
     if (activeGenre) {
