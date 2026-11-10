@@ -9,14 +9,22 @@
  *               pos e dur em milissegundos; em = quando foi visto (ms desde 1970)
  *   favTitulos: {tipo, titulo, ano, letra}
  *   favCanais:  nome do canal
+ *   listas:     {canais, filmes, em, minhas: [{nome, link}]} — os dois endereços
+ *               (em = quando foram escolhidos, ms) e as listas adicionadas por link
  *
  * Progresso: vale o mais recente. Favoritos: união (desmarcar num aparelho
- * não desmarca no outro).
+ * não desmarca no outro). Endereços: vale o escolhido por último; quem nunca
+ * escolheu (padrão ou vazio) fica com o que o outro escolheu. Listas
+ * adicionadas: união pelo link (a lista vinda de arquivo fica só no aparelho).
  */
 import { useMediaStore } from '../stores/mediaStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useChannelStore } from '../stores/channelStore';
+import { useLinksStore } from '../stores/linksStore';
 import { makeVodId, parseVodId, channelId } from './saimoSources';
+import { aplicarLinks } from './listas';
+import { adicionarLista, carregarMinhasListas, getListas, linkValido } from './minhasListas';
+import { LINK_CANAIS_PADRAO, LINK_FILMES_PADRAO, normalizarLink } from '../utils/links';
 
 interface Progresso {
   tipo: 'f' | 's';
@@ -68,7 +76,44 @@ export function pacoteDeDados(): Record<string, unknown> {
   const favCanais = useFavoritesStore.getState().favorites
     .map((id) => nomes.get(id))
     .filter((n): n is string => !!n);
-  return { t: 'dados', progresso, favTitulos, favCanais };
+  const links = useLinksStore.getState();
+  const listas = {
+    canais: links.linkCanais,
+    filmes: links.linkFilmes,
+    em: links.linksEm,
+    minhas: getListas().filter((l) => !!l.link).map((l) => ({ nome: l.nome, link: l.link as string })),
+  };
+  return { t: 'dados', progresso, favTitulos, favCanais, listas };
+}
+
+/** Os endereços e as listas adicionadas que vieram do outro aparelho. */
+async function aplicarListas(l: any): Promise<void> {
+  if (!l || typeof l !== 'object') return;
+  const local = useLinksStore.getState();
+  const em = Number(l.em) || 0;
+  const ler = (v: unknown): string | null => (typeof v === 'string' ? (v ? normalizarLink(v) ?? '' : '') : null);
+  const canais = ler(l.canais);
+  const filmes = ler(l.filmes);
+  if (canais !== null && filmes !== null) {
+    if (em > local.linksEm) {
+      await aplicarLinks(canais, filmes, em);
+    } else if (local.linksEm === 0) {
+      // Aqui nunca se escolheu nada: fica o que o outro escolheu, sem trocar
+      // um endereço próprio por um padrão.
+      const fraco = (v: string, padrao: string) => !v || v === padrao;
+      const c = fraco(local.linkCanais, LINK_CANAIS_PADRAO) && !fraco(canais, LINK_CANAIS_PADRAO) ? canais : local.linkCanais;
+      const f = fraco(local.linkFilmes, LINK_FILMES_PADRAO) && !fraco(filmes, LINK_FILMES_PADRAO) ? filmes : local.linkFilmes;
+      if (c !== local.linkCanais || f !== local.linkFilmes) await aplicarLinks(c, f, em);
+    }
+  }
+  const minhas: Array<{ nome?: string; link?: string }> = Array.isArray(l.minhas) ? l.minhas : [];
+  if (!minhas.length) return;
+  await carregarMinhasListas();
+  for (const m of minhas) {
+    const link = typeof m?.link === 'string' ? m.link.trim() : '';
+    if (!linkValido(link) || getListas().some((x) => x.link === link)) continue;
+    try { await adicionarLista(link, typeof m.nome === 'string' ? m.nome : ''); } catch { /* lista fora do ar ou limite: segue */ }
+  }
 }
 
 /** Junta o que veio da TV ao que o celular tem. */
@@ -122,4 +167,6 @@ export function aplicarDados(msg: any): void {
     const id = channelId(nome);
     if (!canais.isFavorite(id)) canais.addFavorite(id);
   }
+
+  void aplicarListas(msg?.listas).catch(() => { /* não derruba a conexão */ });
 }

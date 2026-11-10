@@ -12,11 +12,14 @@ interface LinksState {
     linkCanais: string;
     /** Endereço-base da lista de filmes e séries ('' = sem endereço). */
     linkFilmes: string;
+    /** Quando os endereços foram escolhidos (ms; 0 = nunca mexeu). Na sincronia
+     *  com a TV pelo Saimo Connect vale o mais recente. */
+    linksEm: number;
     /** Os caches de listas das versões anteriores já foram apagados. */
     migrado: boolean;
     /** Lido do armazenamento (e migrado). Não é gravado. */
     pronto: boolean;
-    setLinks: (canais: string, filmes: string) => void;
+    setLinks: (canais: string, filmes: string, em?: number) => void;
 }
 
 /** Caches de listas gravados pelas versões que tinham catálogo embutido. */
@@ -46,9 +49,10 @@ export const useLinksStore = create<LinksState>()(
         (set) => ({
             linkCanais: LINK_CANAIS_PADRAO,
             linkFilmes: LINK_FILMES_PADRAO,
+            linksEm: 0,
             migrado: false,
             pronto: false,
-            setLinks: (canais, filmes) => set({ linkCanais: canais, linkFilmes: filmes }),
+            setLinks: (canais, filmes, em) => set({ linkCanais: canais, linkFilmes: filmes, linksEm: em ?? Date.now() }),
         }),
         {
             name: 'saimo-links',
@@ -56,6 +60,7 @@ export const useLinksStore = create<LinksState>()(
             partialize: (s) => ({
                 linkCanais: s.linkCanais === LINK_CANAIS_PADRAO ? undefined : s.linkCanais,
                 linkFilmes: s.linkFilmes === LINK_FILMES_PADRAO ? undefined : s.linkFilmes,
+                linksEm: s.linksEm,
                 migrado: s.migrado,
             }),
             onRehydrateStorage: () => (state) => {

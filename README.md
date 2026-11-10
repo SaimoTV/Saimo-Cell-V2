@@ -115,6 +115,7 @@ nem o endereço.
   `scripts/ajustar-rn-video.js` no postinstall) e, ao ligar o som pela primeira
   vez, o app pede para sair da otimização de bateria. Testado com tela apagada e
   Doze profundo forçado: som e conexão seguem.
+- **Sincronia pelo Saimo Connect** (`{"t":"dados"}`, mesmo formato na TV Box, Mac, Windows e celular): ao conectar e a cada mudança vão onde parou em filmes e episódios, títulos favoritos, canais favoritos, os dois endereços das listas (vale o escolhido por último; quem nunca escolheu fica com o do outro aparelho) e as listas adicionadas por link (união; a que veio de arquivo fica só no aparelho). Código em `services/sincroniaDados.ts`.
 - **Som da TV no celular** pelo Saimo Connect, sincronizado com a imagem
   (`components/ConnectAudioHost.tsx`, `services/sincroniaTv.ts`): a lista HLS
   passa pelo `/hls` da TV, que a estende e escreve a régua de tempo. A conta

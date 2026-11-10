@@ -38,7 +38,7 @@ export async function testarLink(tipo: TipoDeLista, base: string, prazoMs = 10_0
  * Grava os dois endereços (já normalizados; '' = apagar) e recarrega os dados.
  * Endereço que mudou perde o que tinha em cache; apagado volta ao estado vazio.
  */
-export async function aplicarLinks(canais: string, filmes: string): Promise<void> {
+export async function aplicarLinks(canais: string, filmes: string, em?: number): Promise<void> {
     const antes = useLinksStore.getState();
     const mudouCanais = canais !== antes.linkCanais;
     const mudouFilmes = filmes !== antes.linkFilmes;
@@ -54,7 +54,7 @@ export async function aplicarLinks(canais: string, filmes: string): Promise<void
         clearTrendingCache();
     }
 
-    useLinksStore.getState().setLinks(canais, filmes);
+    useLinksStore.getState().setLinks(canais, filmes, em);
 
     if (mudouCanais) {
         if (!canais) {

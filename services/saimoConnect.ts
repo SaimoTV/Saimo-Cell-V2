@@ -7,6 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useConnectStore, initConnectStore, DiscoveredTv, TvState, PhoneAudioMode } from '../stores/connectStore';
 import { registrarPong, registrarPosicoes, limparSincronia } from './sincroniaTv';
 import { pacoteDeDados, aplicarDados } from './sincroniaDados';
+import { useLinksStore } from '../stores/linksStore';
+import { aoMudar as aoMudarListas, getListas } from './minhasListas';
 import { useMediaStore } from '../stores/mediaStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 
@@ -186,7 +188,15 @@ class SaimoConnectService {
     const b = useFavoritesStore.subscribe((novo, velho) => {
       if (novo.favorites !== velho.favorites) this.agendarDados(1000);
     });
-    this.pararDeVigiarDados = () => { a(); b(); clearTimeout(this.envioDeDados); };
+    // Endereços e listas adicionadas também vão à TV quando mudam aqui.
+    const c = useLinksStore.subscribe((novo, velho) => {
+      if (novo.linksEm !== velho.linksEm) this.agendarDados(1000);
+    });
+    let quantas = getListas().length;
+    const d = aoMudarListas(() => {
+      if (getListas().length !== quantas) { quantas = getListas().length; this.agendarDados(1000); }
+    });
+    this.pararDeVigiarDados = () => { a(); b(); c(); d(); clearTimeout(this.envioDeDados); };
   }
   private initialized = false;
   // PIN já reenviado neste socket: evita laço se a TV recusar o código.
