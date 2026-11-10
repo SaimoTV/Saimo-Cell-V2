@@ -15,8 +15,8 @@ que os define): `https://canais-saimo.pages.dev/` e
 **Ajustes > Listas** dá para trocar cada endereço (testado: `catalogo.txt` e
 `indice.txt` precisam responder 200), **desligar** uma lista (salvar o campo
 vazio apaga o endereço e os dados dela; a aba fica no estado vazio, sem pedido
-de rede) e **Restaurar padrão**. Só o que difere do padrão é gravado
-(`stores/linksStore.ts`). A normalização (`utils/links.ts`) completa `https://`,
+de rede) e **Restaurar padrão**. Desde a 2.8.0 o endereço de fábrica também é gravado
+(`stores/linksStore.ts`), para o app seguir com a mesma lista; gravar o padrão não muda `linksEm`. A normalização (`utils/links.ts`) completa `https://`,
 tira `?query`/`#fragmento`, descarta um arquivo colado no fim e garante `/`.
 O endereço de canais serve `catalogo.txt`, `canais.txt`, `restritos.txt` e
 `guia.txt` (feeds XMLTV, apelidos, guiadetv e Pluto do guia de programação,
@@ -25,8 +25,8 @@ campo `categoria:` do catálogo (sem categoria: "Outros"). Na primeira execuçã
 desta versão os caches de listas das versões anteriores são apagados;
 favoritos, progresso e ajustes ficam.
 
-Atualização: o app lê um endereço fixo,
-`https://canais-saimo.pages.dev/versao.json`
+Atualização: o app lê um endereço fixo, o `versao.json` da última release
+(`URL_VERSAO` em `services/atualizacao.ts`, independente das listas)
 (`arquivos.celular`), compara a versão e baixa o APK. O link do `versao.json` só
 é aceito se for `https` em `github.com/<dono>/<repo>/releases/download/…` (ou os
 hosts de redirecionamento do GitHub). Qualquer falha na leitura significa "sem

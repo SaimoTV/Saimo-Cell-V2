@@ -1,8 +1,11 @@
 // Atualização do app: lê o versao.json do endereço fixo abaixo e valida o link
 // de download, que vem do próprio arquivo.
 
-/** O endereço de atualização: um só, fixo (não é uma lista, é infraestrutura). */
-export const URL_VERSAO = 'https://canais-saimo.pages.dev/versao.json';
+/**
+ * O endereço de atualização: um só, fixo — o versao.json anexado à última
+ * release. Não depende de nenhum endereço de lista.
+ */
+export const URL_VERSAO = 'https://github.com/SaimoTV/saimo-downloads/releases/latest/download/versao.json';
 
 export interface ArquivoAtualizacao {
   nome: string;

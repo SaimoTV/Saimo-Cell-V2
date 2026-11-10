@@ -1,6 +1,8 @@
 // Os dois endereços de lista (contrato "app sem listas"). Valem os de fábrica
-// (utils/links.ts) até a pessoa trocar ou desligar em Ajustes > Listas. Só o que
-// difere do padrão é gravado: valor ausente = padrão; '' = lista desligada.
+// (utils/links.ts) até a pessoa trocar ou desligar em Ajustes > Listas. Desde a
+// 2.8.0 o endereço de fábrica também é GRAVADO (na primeira leitura): o app
+// segue com a mesma lista mesmo quando o padrão sair de uma versão futura.
+// '' = lista desligada. Gravar o padrão não muda `linksEm` (não é uma escolha).
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -58,8 +60,8 @@ export const useLinksStore = create<LinksState>()(
             name: 'saimo-links',
             storage: createJSONStorage(() => AsyncStorage),
             partialize: (s) => ({
-                linkCanais: s.linkCanais === LINK_CANAIS_PADRAO ? undefined : s.linkCanais,
-                linkFilmes: s.linkFilmes === LINK_FILMES_PADRAO ? undefined : s.linkFilmes,
+                linkCanais: s.linkCanais,
+                linkFilmes: s.linkFilmes,
                 linksEm: s.linksEm,
                 migrado: s.migrado,
             }),

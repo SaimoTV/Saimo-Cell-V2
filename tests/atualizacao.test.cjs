@@ -42,5 +42,5 @@ test('sha256 malformado é ignorado', () => {
 });
 
 test('endereço de atualização é um só e fixo', () => {
-  assert.equal(URL_VERSAO, 'https://canais-saimo.pages.dev/versao.json');
+  assert.equal(URL_VERSAO, 'https://github.com/SaimoTV/saimo-downloads/releases/latest/download/versao.json');
 });
