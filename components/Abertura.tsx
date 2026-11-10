@@ -32,7 +32,7 @@ let jaMostrou = false;
 SplashScreen.preventAutoHideAsync().catch(() => {});
 SplashScreen.setOptions({ duration: 150, fade: true });
 
-export default function Abertura() {
+export default function Abertura({ aoSair }: { aoSair?: () => void }) {
   const [visivel, setVisivel] = useState(() => !jaMostrou);
 
   useEffect(() => {
@@ -40,6 +40,11 @@ export default function Abertura() {
     // Recarga do JS com o app aberto: nada de vídeo, só soltar a tela do sistema.
     if (!visivel) SplashScreen.hide();
   }, []);
+
+  // Avisa quando a abertura sai de cena (ou já não estava).
+  useEffect(() => {
+    if (!visivel) aoSair?.();
+  }, [visivel]);
 
   if (!visivel) return null;
   return <AberturaVideo aoTerminar={() => setVisivel(false)} />;

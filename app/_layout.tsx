@@ -21,6 +21,7 @@ import { useDownloadStore } from '../stores/downloadStore';
 import { initNotifications } from '../services/downloadNotifications';
 import { iniciar as iniciarTelemetria } from '../services/telemetria';
 import { saimoConnect } from '../services/saimoConnect';
+import { deveMostrarApoie } from '../services/apoieNaVersao';
 import { useConnectStore } from '../stores/connectStore';
 
 // O monitor conta a abertura já na subida do bundle, antes da primeira tela.
@@ -125,7 +126,10 @@ export default function RootLayout() {
         />
       </Stack>
       {/* Por cima de tudo, só na partida a frio: o app monta por baixo. */}
-      <Abertura />
+      <Abertura aoSair={() => {
+        // Primeiro uso e cada versão nova: abre o Apoie por cima, uma vez.
+        deveMostrarApoie().then((sim) => { if (sim) router.push('/apoie' as any); });
+      }} />
     </SafeAreaProvider>
   );
 }
