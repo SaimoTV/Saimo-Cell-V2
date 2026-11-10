@@ -1,9 +1,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizarLink, LINK_CANAIS_PADRAO, LINK_FILMES_PADRAO } = require('../utils/links.ts');
+const { normalizarLink } = require('../utils/links.ts');
 
 test('exemplos do contrato', () => {
-  assert.equal(normalizarLink('saimo-canais.pages.dev'), 'https://saimo-canais.pages.dev/');
+  assert.equal(normalizarLink('lista-exemplo.dev'), 'https://lista-exemplo.dev/');
   assert.equal(normalizarLink('https://x.dev/listas/catalogo.txt'), 'https://x.dev/listas/');
 });
 
@@ -38,15 +38,8 @@ test('último trecho com ponto é arquivo e sai', () => {
 });
 
 test('é idempotente', () => {
-  for (const v of ['saimo-canais.pages.dev', 'https://x.dev/listas/catalogo.txt', 'http://10.0.2.2:8102']) {
+  for (const v of ['lista-exemplo.dev', 'https://x.dev/listas/catalogo.txt', 'http://10.0.2.2:8102']) {
     const n = normalizarLink(v);
     assert.equal(normalizarLink(n), n);
   }
-});
-
-test('endereços de fábrica já estão normalizados', () => {
-  assert.equal(LINK_CANAIS_PADRAO, 'https://canais-saimo.pages.dev/');
-  assert.equal(LINK_FILMES_PADRAO, 'https://filmes-saimo.pages.dev/');
-  assert.equal(normalizarLink(LINK_CANAIS_PADRAO), LINK_CANAIS_PADRAO);
-  assert.equal(normalizarLink(LINK_FILMES_PADRAO), LINK_FILMES_PADRAO);
 });

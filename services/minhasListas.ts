@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { Channel, ChannelStream } from '../types';
 import { chave, ehRestrito, lerM3U, pareceM3U, type CanalM3U } from './minhasListasLeitor';
+import { canaisXtream, deLink, ErroXtream, linkM3u, normalizarServidor } from './xtream';
 
 export const CATEGORIA_MINHAS_LISTAS = 'Minhas listas';
 export const MAX_LISTAS = 10;
@@ -124,7 +125,8 @@ export function getCanaisMinhasListas(): Channel[] {
   return out;
 }
 
-async function baixar(link: string): Promise<CanalM3U[]> {
+/** Baixa um texto (M3U ou resposta da API). Erro genérico, sem o endereço. */
+async function buscarTexto(link: string): Promise<string> {
   const controle = new AbortController();
   const prazo = setTimeout(() => controle.abort(), PRAZO_MS);
   let texto: string;
@@ -146,7 +148,20 @@ async function baixar(link: string): Promise<CanalM3U[]> {
   } finally {
     clearTimeout(prazo);
   }
-  return analisar(texto);
+  return texto;
+}
+
+async function baixar(link: string): Promise<CanalM3U[]> {
+  // Conta com usuário e senha (Xtream): lê pela API do servidor.
+  const conta = deLink(link);
+  if (conta) {
+    try {
+      return await canaisXtream(conta, buscarTexto, lerM3U);
+    } catch (e) {
+      throw e instanceof ErroXtream ? new ErroLista(e.message) : e;
+    }
+  }
+  return analisar(await buscarTexto(link));
 }
 
 /** Mesma validação para link e arquivo. */
@@ -168,6 +183,25 @@ export async function lerArquivoEscolhido(uri: string): Promise<string> {
     throw new ErroLista('Não consegui ler esse arquivo');
   }
 }
+
+/**
+ * O link a guardar a partir do que a pessoa digitou. Com usuário e senha, o
+ * primeiro campo é o servidor (Xtream); sem eles, é o link da lista. Devolve
+ * `{ erro }` quando algo não fecha.
+ */
+export function linkDoFormulario(digitado: string, usuario: string, senha: string): { link: string } | { erro: string } {
+  const u = usuario.trim();
+  if (!u !== !senha) return { erro: 'Usuário e senha andam juntos: preencha os dois, ou deixe os dois em branco se a lista é só um link' };
+  if (!u) return { link: digitado.trim() };
+  const base = normalizarServidor(digitado);
+  if (!base) return { erro: 'Esse servidor não parece um endereço válido' };
+  return { link: linkM3u({ base, usuario: u, senha }) };
+}
+
+/** Telas vazias pedem "Adicionar lista": a seção de Ajustes abre o formulário ao aparecer. */
+let pedidoDeAdicionar = false;
+export const pedirAdicionarLista = () => { pedidoDeAdicionar = true; };
+export function consumirPedidoDeAdicionar(): boolean { const p = pedidoDeAdicionar; pedidoDeAdicionar = false; return p; }
 
 export function linkValido(link: string): boolean {
   return /^https?:\/\/\S+$/i.test(link.trim());

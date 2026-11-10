@@ -1,13 +1,10 @@
-// Os dois endereços de lista (contrato "app sem listas"). Valem os de fábrica
-// (utils/links.ts) até a pessoa trocar ou desligar em Ajustes > Listas. Desde a
-// 2.8.0 o endereço de fábrica também é GRAVADO (na primeira leitura): o app
-// segue com a mesma lista mesmo quando o padrão sair de uma versão futura.
-// '' = lista desligada. Gravar o padrão não muda `linksEm` (não é uma escolha).
+// Os dois endereços de lista no formato do Saimo (contrato "app sem listas"):
+// o app não traz nenhum; a pessoa informa em Ajustes > Listas. '' = sem endereço
+// (lista desligada). Quem já usava um endereço o tem gravado e continua com ele.
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Paths, Directory } from 'expo-file-system';
-import { LINK_CANAIS_PADRAO, LINK_FILMES_PADRAO } from '../utils/links';
 
 interface LinksState {
     /** Endereço-base da lista de canais, já normalizado ('' = sem endereço). */
@@ -49,8 +46,8 @@ const aguardar = new Promise<void>(resolve => { liberar = resolve; });
 export const useLinksStore = create<LinksState>()(
     persist(
         (set) => ({
-            linkCanais: LINK_CANAIS_PADRAO,
-            linkFilmes: LINK_FILMES_PADRAO,
+            linkCanais: '',
+            linkFilmes: '',
             linksEm: 0,
             migrado: false,
             pronto: false,

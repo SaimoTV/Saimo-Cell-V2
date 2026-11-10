@@ -1,10 +1,9 @@
 /**
- * Os dois endereços de fábrica (UM só lugar). Valem enquanto a pessoa não
- * escolher outro em Ajustes > Listas; salvar vazio desliga a lista; "Restaurar
- * padrão" volta a estes.
+ * O app não traz endereço de lista nenhum: a pessoa informa os endereços do
+ * Saimo em Ajustes > Listas (ou adiciona uma lista M3U / com usuário e senha em
+ * "Minhas listas"). Salvar vazio desliga a lista. Quem já usava um endereço o
+ * tem gravado e continua com ele.
  */
-export const LINK_CANAIS_PADRAO = 'https://canais-saimo.pages.dev/';
-export const LINK_FILMES_PADRAO = 'https://filmes-saimo.pages.dev/';
 
 /**
  * Normalização do endereço de uma lista (contrato "app sem listas").

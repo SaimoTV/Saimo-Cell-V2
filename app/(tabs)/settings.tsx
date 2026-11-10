@@ -208,7 +208,7 @@ export default function SettingsScreen() {
               <Ionicons name="tv-outline" size={22} color={Colors.primary} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.settingLabel}>Lista de canais</Text>
-                <Text style={styles.linkValor} numberOfLines={1}>{linkCanais || 'Desligada'}</Text>
+                <Text style={styles.linkValor} numberOfLines={1}>{linkCanais || 'Não informado'}</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
@@ -221,7 +221,7 @@ export default function SettingsScreen() {
               <Ionicons name="film-outline" size={22} color={Colors.primary} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.settingLabel}>Lista de filmes e séries</Text>
-                <Text style={styles.linkValor} numberOfLines={1}>{linkFilmes || 'Desligada'}</Text>
+                <Text style={styles.linkValor} numberOfLines={1}>{linkFilmes || 'Não informado'}</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />

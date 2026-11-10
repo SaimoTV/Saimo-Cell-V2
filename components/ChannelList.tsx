@@ -1,3 +1,4 @@
+import { pedirAdicionarLista } from '../services/minhasListas';
 import React, { memo, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
@@ -61,17 +62,25 @@ const ChannelList = memo(({ channels, carregando = false, semEndereco = false, r
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="tv-outline" size={64} color={Colors.textSecondary} />
-        <Text style={styles.emptyText}>Nenhum canal.</Text>
+        <Text style={styles.emptyText}>Bem-vindo ao Saimo!</Text>
         <Text style={styles.emptyHint}>
-          Informe o endereço da lista de canais em Ajustes {'>'} Listas.
+          Para começar, adicione uma lista M3U (só o link já basta), uma lista com usuário e senha ou o endereço de uma lista do Saimo.
         </Text>
         <TouchableOpacity
           style={styles.emptyButton}
+          onPress={() => { pedirAdicionarLista(); router.push('/(tabs)/settings' as any); }}
+          accessibilityRole="button"
+          testID="canais-adicionar-lista"
+        >
+          <Text style={styles.emptyButtonText}>Adicionar lista</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.emptyButton, { marginTop: 12 }]}
           onPress={() => router.push('/(tabs)/settings' as any)}
           accessibilityRole="button"
           testID="canais-abrir-ajustes"
         >
-          <Text style={styles.emptyButtonText}>Abrir Ajustes</Text>
+          <Text style={styles.emptyButtonText}>Informar endereços do Saimo</Text>
         </TouchableOpacity>
       </View>
     );

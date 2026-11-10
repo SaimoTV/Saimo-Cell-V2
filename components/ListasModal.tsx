@@ -6,7 +6,7 @@ import {
 
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/Colors';
 import { useLinksStore } from '../stores/linksStore';
-import { normalizarLink, LINK_CANAIS_PADRAO, LINK_FILMES_PADRAO } from '../utils/links';
+import { normalizarLink } from '../utils/links';
 import { aplicarLinks, testarLink, type TipoDeLista } from '../services/listas';
 
 interface Props {
@@ -81,10 +81,6 @@ export default function ListasModal({ visible, onClose }: Props) {
     if (pendente) await gravar(pendente.canais, pendente.filmes);
   }, [pendente, gravar]);
 
-  const restaurar = useCallback(async () => {
-    await gravar(LINK_CANAIS_PADRAO, LINK_FILMES_PADRAO);
-  }, [gravar]);
-
   const testando = fase === 'testando';
   const campo = (tipo: TipoDeLista, rotulo: string, valor: string, exemplo: string) => (
     <View style={styles.campo}>
@@ -146,14 +142,6 @@ export default function ListasModal({ visible, onClose }: Props) {
                 </TouchableOpacity>
               </View>
             )}
-            <TouchableOpacity
-              style={[styles.botao, styles.secundario, { marginTop: Spacing.sm }]}
-              onPress={restaurar}
-              disabled={testando}
-              testID="listas-restaurar"
-            >
-              <Text style={styles.secundarioTexto}>Restaurar padrão</Text>
-            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.botao, styles.secundario, { marginTop: Spacing.sm }]}
               onPress={onClose}

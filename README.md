@@ -7,23 +7,32 @@
 Canais ao vivo, guia de programação, filmes e séries no celular. Versão atual:
 **2.1.4**. Expo SDK 57, React Native 0.86, React 19.2, react-native-video.
 
-Listas: o app **não traz lista nenhuma** (nem canais, nem filmes, nem tabelas
-por canal). Traz só dois endereços de fábrica, ativos desde a primeira abertura
-(`LINK_CANAIS_PADRAO` e `LINK_FILMES_PADRAO` em `utils/links.ts`, o único lugar
-que os define): `https://canais-saimo.pages.dev/` e
-`https://filmes-saimo.pages.dev/`. Ninguém precisa digitar nada. Em
-**Ajustes > Listas** dá para trocar cada endereço (testado: `catalogo.txt` e
-`indice.txt` precisam responder 200), **desligar** uma lista (salvar o campo
-vazio apaga o endereço e os dados dela; a aba fica no estado vazio, sem pedido
-de rede) e **Restaurar padrão**. Desde a 2.8.0 o endereço de fábrica também é gravado
-(`stores/linksStore.ts`), para o app seguir com a mesma lista; gravar o padrão não muda `linksEm`. A normalização (`utils/links.ts`) completa `https://`,
-tira `?query`/`#fragmento`, descarta um arquivo colado no fim e garante `/`.
-O endereço de canais serve `catalogo.txt`, `canais.txt`, `restritos.txt` e
-`guia.txt` (feeds XMLTV, apelidos, guiadetv e Pluto do guia de programação,
-`utils/guia.ts`); o de filmes serve a pasta `vod/`. A seção de cada canal vem do
-campo `categoria:` do catálogo (sem categoria: "Outros"). Na primeira execução
-desta versão os caches de listas das versões anteriores são apagados;
-favoritos, progresso e ajustes ficam.
+Listas: o app **não traz lista nenhuma**, nem endereço de lista (nem canais, nem
+filmes, nem tabelas por canal). Na primeira abertura a aba Ao vivo mostra
+"Bem-vindo ao Saimo!" com dois botões:
+
+- **Adicionar lista:** abre Ajustes > Minhas listas já com o formulário: um link
+  **M3U** (só ele já basta) ou **servidor + usuário + senha** (Xtream; usuário e
+  senha são opcionais, só para listas que pedem login; `linkDoFormulario`).
+  Cole direto um link `…/get.php?username=…&password=…` e o app o reconhece como
+  conta Xtream (`services/xtream.ts`): lê os canais pela API do servidor
+  (`player_api.php`, com as categorias) ou, se ela não responde, pelo M3U. Cada
+  canal ganha as fontes `.m3u8` e `.ts`. A conta é guardada como esse link, então
+  viaja pelo Saimo Connect como qualquer outra lista. Testes:
+  `tests/xtream.test.cjs`.
+- **Informar endereços do Saimo:** em **Ajustes > Listas**, os dois endereços-base
+  no formato do Saimo (testado: `catalogo.txt` e `indice.txt` precisam responder
+  200), sem padrão de fábrica. Salvar o campo vazio apaga o endereço e os dados
+  dela. Quem já usava um endereço o mantém (`stores/linksStore.ts`). Na sincronia
+  pelo Saimo Connect, quem nunca escolheu (`linksEm` 0) adota o que o outro enviou.
+
+A normalização (`utils/links.ts`) completa `https://`, tira `?query`/`#fragmento`,
+descarta um arquivo colado no fim e garante `/`. No formato do Saimo, o endereço de
+canais serve `catalogo.txt`, `canais.txt`, `restritos.txt` e `guia.txt` (feeds
+XMLTV, apelidos, guiadetv e Pluto do guia de programação, `utils/guia.ts`); o de
+filmes serve a pasta `vod/`. A seção de cada canal vem do campo `categoria:` do
+catálogo (sem categoria: "Outros"). Filmes e séries das listas da própria pessoa
+ainda não entram em Filmes: por ora as listas da pessoa alimentam o Ao vivo.
 
 Atualização: o app lê um endereço fixo, o `versao.json` da última release
 (`URL_VERSAO` em `services/atualizacao.ts`, independente das listas)

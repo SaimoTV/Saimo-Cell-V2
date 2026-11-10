@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/Colors';
 import {
-  aoMudar, adicionarLista, adicionarListaDeArquivo, lerArquivoEscolhido, alternarLista, atualizarLista, carregarMinhasListas, getListas,
+  aoMudar, adicionarLista, linkDoFormulario, consumirPedidoDeAdicionar, adicionarListaDeArquivo, lerArquivoEscolhido, alternarLista, atualizarLista, carregarMinhasListas, getListas,
   removerLista, textoAtualizada, ErroLista, MAX_LISTAS, type MinhaLista,
 } from '../services/minhasListas';
 
@@ -20,28 +20,36 @@ export default function MinhasListas() {
   const [aberto, setAberto] = useState(false);
   const [link, setLink] = useState('');
   const [nome, setNome] = useState('');
+  const [usuario, setUsuario] = useState('');
+  const [senha, setSenha] = useState('');
   const [baixando, setBaixando] = useState(false);
   const [erroAdd, setErroAdd] = useState('');
 
   useEffect(() => {
+    // Veio da tela vazia ("Adicionar lista"): já abre o formulário.
+    if (consumirPedidoDeAdicionar()) setAberto(true);
     void carregarMinhasListas().then(() => setListas([...getListas()]));
     return aoMudar(() => setListas([...getListas()]));
   }, []);
 
   const adicionar = useCallback(async () => {
     setErroAdd('');
+    const f = linkDoFormulario(link, usuario, senha);
+    if ('erro' in f) { setErroAdd(f.erro); return; }
     setBaixando(true);
     try {
-      await adicionarLista(link, nome);
+      await adicionarLista(f.link, nome);
       setAberto(false);
       setLink('');
       setNome('');
+      setUsuario('');
+      setSenha('');
     } catch (e) {
       setErroAdd(e instanceof ErroLista ? e.message : 'Não consegui baixar essa lista');
     } finally {
       setBaixando(false);
     }
-  }, [link, nome]);
+  }, [link, nome, usuario, senha]);
 
   const escolherArquivo = useCallback(async (): Promise<string | null> => {
     const r = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
@@ -94,7 +102,7 @@ export default function MinhasListas() {
     <>
       <Text style={styles.sectionTitle}>Minhas listas</Text>
       <View style={styles.section}>
-        <Text style={styles.ajuda}>Cole o link de uma lista .m3u. Ela fica só neste aparelho.</Text>
+        <Text style={styles.ajuda}>Cole o link da sua lista M3U (só isso já basta) ou, se ela pede login, o servidor com usuário e senha. Ela fica só neste aparelho.</Text>
         {erro ? <Text style={styles.erro}>{erro}</Text> : null}
         {listas.map(l => (
           <View key={l.id} style={styles.item} testID={`minha-lista-${l.id}`}>
@@ -139,7 +147,8 @@ export default function MinhasListas() {
         <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.card}>
             <Text style={styles.titulo}>Adicionar lista</Text>
-            <Text style={styles.rotulo}>Link da lista (.m3u)</Text>
+            <Text style={styles.ajudaForm}>Só o link já basta. Usuário e senha são opcionais: use só se a sua lista pedir login.</Text>
+            <Text style={styles.rotulo}>Link da lista (M3U) ou servidor</Text>
             <TextInput
               style={[styles.input, !!erroAdd && { borderColor: Colors.error }]}
               value={link}
@@ -151,6 +160,31 @@ export default function MinhasListas() {
               keyboardType="url"
               editable={!baixando}
               testID="minhas-listas-link"
+            />
+            <Text style={[styles.rotulo, { marginTop: Spacing.md }]}>Usuário (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              value={usuario}
+              onChangeText={(t) => { setUsuario(t); setErroAdd(''); }}
+              placeholder="Deixe em branco se a lista é só um link"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!baixando}
+              testID="minhas-listas-usuario"
+            />
+            <Text style={[styles.rotulo, { marginTop: Spacing.md }]}>Senha (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              value={senha}
+              onChangeText={(t) => { setSenha(t); setErroAdd(''); }}
+              placeholder="Só com usuário"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              editable={!baixando}
+              testID="minhas-listas-senha"
             />
             <Text style={[styles.rotulo, { marginTop: Spacing.md }]}>Nome (opcional)</Text>
             <TextInput
@@ -185,6 +219,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', marginTop: Spacing.lg, marginBottom: Spacing.sm,
   },
   section: { backgroundColor: Colors.cardBg, borderRadius: BorderRadius.lg, overflow: 'hidden' },
+  ajudaForm: { color: Colors.textSecondary, fontSize: 13, marginBottom: Spacing.sm },
   ajuda: { color: Colors.textSecondary, fontSize: 13, padding: Spacing.md, paddingBottom: Spacing.sm },
   erro: { color: Colors.errorLight, fontSize: 13, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
   item: { padding: Spacing.md, borderTopWidth: 1, borderTopColor: Colors.border },

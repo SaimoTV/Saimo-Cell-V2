@@ -24,7 +24,7 @@ import { useLinksStore } from '../stores/linksStore';
 import { makeVodId, parseVodId, channelId } from './saimoSources';
 import { aplicarLinks } from './listas';
 import { adicionarLista, carregarMinhasListas, getListas, linkValido } from './minhasListas';
-import { LINK_CANAIS_PADRAO, LINK_FILMES_PADRAO, normalizarLink } from '../utils/links';
+import { normalizarLink } from '../utils/links';
 
 interface Progresso {
   tipo: 'f' | 's';
@@ -98,11 +98,10 @@ async function aplicarListas(l: any): Promise<void> {
     if (em > local.linksEm) {
       await aplicarLinks(canais, filmes, em);
     } else if (local.linksEm === 0) {
-      // Aqui nunca se escolheu nada: fica o que o outro escolheu, sem trocar
-      // um endereço próprio por um padrão.
-      const fraco = (v: string, padrao: string) => !v || v === padrao;
-      const c = fraco(local.linkCanais, LINK_CANAIS_PADRAO) && !fraco(canais, LINK_CANAIS_PADRAO) ? canais : local.linkCanais;
-      const f = fraco(local.linkFilmes, LINK_FILMES_PADRAO) && !fraco(filmes, LINK_FILMES_PADRAO) ? filmes : local.linkFilmes;
+      // Aqui nunca se escolheu nada: fica o que o outro escolheu (e um
+      // endereço que o outro não tem não apaga o daqui).
+      const c = canais || local.linkCanais;
+      const f = filmes || local.linkFilmes;
       if (c !== local.linkCanais || f !== local.linkFilmes) await aplicarLinks(c, f, em);
     }
   }
