@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Platform, Pressable, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
@@ -17,6 +17,7 @@ export default function BotaoApoie() {
   }, [escala]);
   const animado = useAnimatedStyle(() => ({ transform: [{ scale: escala.value }] }));
 
+  if (Platform.OS === 'ios') return null;
   return (
     <Pressable onPress={() => router.push('/apoie' as any)} accessibilityRole="button" accessibilityLabel="Apoie o Saimo TV" hitSlop={6}>
       <Animated.View style={animado}>

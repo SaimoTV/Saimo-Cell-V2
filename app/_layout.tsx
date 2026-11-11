@@ -94,7 +94,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <Updater />
+      {Platform.OS === 'android' && <Updater />}
       <ConnectAudioHost />
       <ConnectSheet />
       <ConnectRemote />

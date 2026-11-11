@@ -31,7 +31,7 @@
         "NSPhotoLibraryAddUsageDescription": "Saimo TV salva seus downloads na Galeria para voc\u00ea assistir offline em outros apps.",
         "NSPhotoLibraryUsageDescription": "Saimo TV organiza seus downloads em um \u00e1lbum na Galeria."
       },
-      "buildNumber": "3.0.0"
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
@@ -119,7 +119,8 @@
           },
           "ios": {
             "useFrameworks": "static",
-            "enableBitcode": false
+            "enableBitcode": false,
+            "enableSceneSupport": true
           }
         }
       ],

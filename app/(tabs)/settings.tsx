@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -189,6 +190,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Apoie: em destaque, antes de tudo */}
+        {Platform.OS !== 'ios' && (
         <TouchableOpacity onPress={() => router.push('/apoie' as any)} activeOpacity={0.85} accessibilityRole="button">
           <LinearGradient colors={['#0FA89A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.apoie}>
             <Ionicons name="heart" size={26} color="#FFFFFF" />
@@ -199,6 +201,7 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
           </LinearGradient>
         </TouchableOpacity>
+        )}
 
         {/* Listas */}
         <Text style={styles.sectionTitle}>Listas</Text>
