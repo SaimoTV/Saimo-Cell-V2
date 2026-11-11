@@ -66,6 +66,9 @@ const ChannelList = memo(({ channels, carregando = false, semEndereco = false, r
         <Text style={styles.emptyHint}>
           Para começar, adicione uma lista M3U (só o link já basta), uma lista com usuário e senha ou o endereço de uma lista do Saimo.
         </Text>
+        <Text style={styles.emptyHint}>
+          O Saimo TV é só um reprodutor: não traz nem fornece canais, filmes ou séries. O conteúdo vem da lista que você mesmo adicionar, em http ou https.
+        </Text>
         <TouchableOpacity
           style={styles.emptyButton}
           onPress={() => { pedirAdicionarLista(); router.push('/(tabs)/settings' as any); }}

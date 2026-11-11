@@ -1,0 +1,9 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="bbb" tvg-name="Big Buck Bunny" tvg-logo="" group-title="Teste - Animacao",Big Buck Bunny
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="tos" tvg-name="Tears of Steel" tvg-logo="" group-title="Teste - Animacao",Tears of Steel
+https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8
+#EXTINF:-1 tvg-id="bipbop-fmp4" tvg-name="Apple BipBop fMP4" tvg-logo="" group-title="Teste - Apple",Apple BipBop fMP4
+https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8
+#EXTINF:-1 tvg-id="bipbop-4x3" tvg-name="Apple BipBop 4x3" tvg-logo="" group-title="Teste - Apple",Apple BipBop 4x3
+https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8
