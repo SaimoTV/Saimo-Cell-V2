@@ -460,7 +460,7 @@ export class FastDownload {
                     return out;
                 })();
             handle.offset = chunk.start + chunk.downloaded;
-            handle.writeBytes(merged);
+            handle.writeBytesSync(merged);
             chunk.downloaded += merged.byteLength;
             pending = [];
             pendingBytes = 0;
@@ -515,15 +515,13 @@ export class FastDownload {
             try { await FileSystemLegacy.deleteAsync(this.destPath, { idempotent: true }); } catch {}
         }
 
-        // Create file if it doesn't exist (no-op if it already does)
-        const info = await FileSystemLegacy.getInfoAsync(this.destPath);
+        // Create file if it doesn't exist (no-op if it already does).
+        // O arquivo e a pasta sao criados pela MESMA API que depois o abre (expo-file-system 58):
+        // com pastas de nome "saimo|m|A|..." a API legada e a nova resolvem o caminho de jeitos
+        // diferentes, o create() falhava em silencio e o open() dizia "video.mp4 doesn't exist".
         const file = new File(enderecoDoArquivo(this.destPath));
-        if (!info.exists) {
-            try {
-                file.create();
-            } catch {
-                // Ignore errors if it was created concurrently
-            }
+        if (!file.exists) {
+            file.create({ intermediates: true });
         }
 
         // Pre-allocate by writing last byte (creates sparse file) — only for fresh starts
@@ -534,7 +532,7 @@ export class FastDownload {
                 const handle = file.open();
                 try {
                     handle.offset = size - 1;
-                    handle.writeBytes(new Uint8Array([0]));
+                    handle.writeBytesSync(new Uint8Array([0]));
                 } finally {
                     handle.close();
                 }
@@ -547,7 +545,7 @@ export class FastDownload {
         const handle = file.open();
         try {
             handle.offset = offset;
-            handle.writeBytes(bytes);
+            handle.writeBytesSync(bytes);
         } finally {
             handle.close();
         }

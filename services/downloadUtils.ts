@@ -1,10 +1,11 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 export function formatBytes(bytes: number, decimals = 1): string {
-    if (bytes === 0) return '0 B';
+    // Abaixo de 1 B (ou valor invalido) o logaritmo fica negativo e a unidade saia "undefined".
+    if (!isFinite(bytes) || bytes < 1) return '0 B';
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.min(sizes.length - 1, Math.max(0, Math.floor(Math.log(bytes) / Math.log(k))));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
 }
 
