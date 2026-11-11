@@ -29,11 +29,20 @@ export const ALTURA_DA_BARRA = 60;
  * ativa, um indicador em degradê que entra com uma mola. Nada muda de largura
  * ao trocar de aba, então o toque cai sempre onde a pessoa vê.
  */
+/**
+ * No iOS o espaco do indicador de inicio ja existe, entao a barra desce e fica a ~14 pt da borda
+ * (a faixa do indicador fica por baixo dela). No Android a barra continua acima da area segura.
+ */
+function distanciaDoFundo(inferior: number): number {
+  if (Platform.OS === 'ios') return Math.max(inferior - 20, 10);
+  return Math.max(inferior, 8);
+}
+
 export default function BarraDeAbas({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View pointerEvents="box-none" style={[styles.raiz, { bottom: Math.max(insets.bottom, 8) }]}>
+    <View pointerEvents="box-none" style={[styles.raiz, { bottom: distanciaDoFundo(insets.bottom) }]}>
       <View style={styles.capsula}>
         {state.routes.map((rota, indice) => {
           const { options } = descriptors[rota.key];
