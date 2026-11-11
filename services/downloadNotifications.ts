@@ -68,6 +68,14 @@ export async function initNotifications(): Promise<void> {
         });
     }
 
+    if (Platform.OS === 'ios') {
+        // iOS: so le a permissao. O pedido aparece quando o usuario inicia um download
+        // (ensurePermission), no contexto em que a notificacao faz sentido, e nao na abertura do app.
+        const { status } = await Notifications.getPermissionsAsync();
+        permissionGranted = status === 'granted';
+        return;
+    }
+
     await _requestPermission();
 }
 

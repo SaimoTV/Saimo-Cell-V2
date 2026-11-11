@@ -1,3 +1,4 @@
+import { ENDERECOS_SAIMO } from '../constants/recursos';
 import { pedirAdicionarLista } from '../services/minhasListas';
 import React, { memo, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
@@ -64,7 +65,9 @@ const ChannelList = memo(({ channels, carregando = false, semEndereco = false, r
         <Ionicons name="tv-outline" size={64} color={Colors.textSecondary} />
         <Text style={styles.emptyText}>Bem-vindo ao Saimo!</Text>
         <Text style={styles.emptyHint}>
-          Para começar, adicione uma lista M3U (só o link já basta), uma lista com usuário e senha ou o endereço de uma lista do Saimo.
+          {ENDERECOS_SAIMO
+            ? 'Para começar, adicione uma lista M3U (só o link já basta), uma lista com usuário e senha ou o endereço de uma lista do Saimo.'
+            : 'Para começar, adicione uma lista M3U (só o link já basta) ou uma lista com servidor, usuário e senha.'}
         </Text>
         <Text style={styles.emptyHint}>
           O Saimo TV é só um reprodutor: não traz nem fornece canais, filmes ou séries. O conteúdo vem da lista que você mesmo adicionar, em http ou https.
@@ -77,14 +80,16 @@ const ChannelList = memo(({ channels, carregando = false, semEndereco = false, r
         >
           <Text style={styles.emptyButtonText}>Adicionar lista</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.emptyButton, { marginTop: 12 }]}
-          onPress={() => router.push('/(tabs)/settings' as any)}
-          accessibilityRole="button"
-          testID="canais-abrir-ajustes"
-        >
-          <Text style={styles.emptyButtonText}>Informar endereços do Saimo</Text>
-        </TouchableOpacity>
+        {ENDERECOS_SAIMO && (
+          <TouchableOpacity
+            style={[styles.emptyButton, { marginTop: 12 }]}
+            onPress={() => router.push('/(tabs)/settings' as any)}
+            accessibilityRole="button"
+            testID="canais-abrir-ajustes"
+          >
+            <Text style={styles.emptyButtonText}>Informar endereços do Saimo</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }

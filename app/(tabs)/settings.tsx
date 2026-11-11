@@ -1,3 +1,4 @@
+import { ENDERECOS_SAIMO } from '../../constants/recursos';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -203,6 +204,8 @@ export default function SettingsScreen() {
         </TouchableOpacity>
         )}
 
+        {ENDERECOS_SAIMO && (
+        <>
         {/* Listas */}
         <Text style={styles.sectionTitle}>Listas</Text>
         <View style={styles.section}>
@@ -230,6 +233,8 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
           </TouchableOpacity>
         </View>
+        </>
+        )}
 
         <MinhasListas />
 
@@ -362,6 +367,8 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {Platform.OS === 'android' && (
+        <>
         {/* Atualizações */}
         <Text style={styles.sectionTitle}>Atualizações</Text>
         <View style={styles.section}>
@@ -390,6 +397,8 @@ export default function SettingsScreen() {
               : <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />}
           </TouchableOpacity>
         </View>
+        </>
+        )}
 
         {/* App Info */}
         <View style={styles.appInfo}>

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Alert,
+  KeyboardAvoidingView, Platform, Alert, ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -14,6 +15,7 @@ import {
 
 /** Seção de Ajustes "Minhas listas": o usuário cola o link de uma lista .m3u. */
 export default function MinhasListas() {
+  const insets = useSafeAreaInsets();
   const [listas, setListas] = useState<MinhaLista[]>(getListas());
   const [ocupadas, setOcupadas] = useState<Record<string, boolean>>({});
   const [erro, setErro] = useState('');
@@ -144,8 +146,9 @@ export default function MinhasListas() {
       </View>
 
       <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']} transparent visible={aberto} animationType="fade" onRequestClose={() => { if (!baixando) setAberto(false); }}>
-        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.card}>
+        <KeyboardAvoidingView style={[styles.overlay, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 12) }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={[styles.card, { maxHeight: '100%' }]}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <Text style={styles.titulo}>Adicionar lista</Text>
             <Text style={styles.ajudaForm}>Só o link já basta. Usuário e senha são opcionais: use só se a sua lista pedir login.</Text>
             <Text style={styles.rotulo}>Link da lista (M3U) ou servidor</Text>
@@ -206,6 +209,7 @@ export default function MinhasListas() {
             <TouchableOpacity style={[styles.botao, styles.secundario]} onPress={() => setAberto(false)} disabled={baixando}>
               <Text style={styles.secundarioTexto}>Cancelar</Text>
             </TouchableOpacity>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
