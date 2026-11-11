@@ -276,7 +276,7 @@ const MediaCard = memo(({ item, size = 'medium', cardWidth }: MediaCardProps) =>
       </View>
 
       {/* Long Press Action Sheet */}
-      <Modal
+      <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']}
         visible={showOptions}
         transparent
         animationType="slide"

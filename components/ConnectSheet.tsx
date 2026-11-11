@@ -87,7 +87,7 @@ export default function ConnectSheet() {
   if (!visible) return null;
 
   return (
-    <Modal
+    <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']}
       transparent
       visible={visible}
       animationType="slide"

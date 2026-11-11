@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  InteractionManager,
   ImageBackground,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -110,6 +109,11 @@ function TrailerBanner({ item, onOpen }: { item?: MediaItem; onOpen: () => void 
   );
 }
 
+/** O RN 0.88 removeu o InteractionManager: espera o próximo quadro e adia a tarefa. */
+function depoisDaInteracao(tarefa: () => void) {
+  requestAnimationFrame(() => setTimeout(tarefa, 0));
+}
+
 export default function MoviesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -206,7 +210,7 @@ export default function MoviesScreen() {
       setTotalLoaded(getTotalLoadedCount());
       catalogLoadedRef.current = true;
       setLoading(false);
-      InteractionManager.runAfterInteractions(() => {
+      depoisDaInteracao(() => {
         if (!mountedRef.current) return;
         setBgLoading(true);
         startBackgroundLoading(() => {
@@ -254,7 +258,7 @@ export default function MoviesScreen() {
     if (linkFilmes && !loading && !trendingLoadedRef.current) {
       trendingLoadedRef.current = true;
       setTrendingLoading(true);
-      InteractionManager.runAfterInteractions(() => {
+      depoisDaInteracao(() => {
         if (mountedRef.current) loadTrending();
       });
     }
@@ -487,7 +491,7 @@ export default function MoviesScreen() {
   if (semEndereco) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+        <StatusBar barStyle="light-content" />
         <View style={styles.header}>
           <Text style={styles.title}>Filmes & Séries</Text>
         </View>
@@ -513,7 +517,7 @@ export default function MoviesScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+        <StatusBar barStyle="light-content" />
         <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.loadingText}>Carregando catálogo...</Text>
       </View>
@@ -522,7 +526,7 @@ export default function MoviesScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+      <StatusBar barStyle="light-content" />
 
       <View style={styles.header}>
         <View style={styles.headerTop}>

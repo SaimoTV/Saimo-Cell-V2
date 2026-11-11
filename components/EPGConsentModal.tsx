@@ -15,7 +15,7 @@ const { width } = Dimensions.get('window');
 
 export default function EPGConsentModal({ visible, onAccept, onDecline }: EPGConsentModalProps) {
   return (
-    <Modal
+    <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']}
       visible={visible}
       transparent
       animationType="fade"

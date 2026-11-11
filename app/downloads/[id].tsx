@@ -192,7 +192,7 @@ export default function SeriesDownloadsDetailScreen() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle="light-content" />
 
             <ScrollView
                 showsVerticalScrollIndicator={false}

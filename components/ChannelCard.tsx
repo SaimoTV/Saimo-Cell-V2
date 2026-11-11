@@ -236,7 +236,7 @@ const ChannelCard = memo(({ channel }: ChannelCardProps) => {
       </View>
 
       {/* Long Press Action Sheet */}
-      <Modal
+      <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']}
         visible={showOptions}
         transparent
         animationType="slide"

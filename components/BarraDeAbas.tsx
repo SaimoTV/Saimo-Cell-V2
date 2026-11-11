@@ -29,7 +29,7 @@ export const ALTURA_DA_BARRA = 60;
  * ativa, um indicador em degradê que entra com uma mola. Nada muda de largura
  * ao trocar de aba, então o toque cai sempre onde a pessoa vê.
  */
-export default function BarraDeAbas({ state, descriptors, navigation }: BottomTabBarProps) {
+export default function BarraDeAbas({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -42,10 +42,10 @@ export default function BarraDeAbas({ state, descriptors, navigation }: BottomTa
           const icone = ICONES[rota.name] ?? { ativo: 'circle', inativo: 'circle' };
 
           const aoTocar = () => {
-            const evento = navigation.emit({ type: 'tabPress', target: rota.key, canPreventDefault: true });
-            if (!ativa && !evento.defaultPrevented) navigation.navigate(rota.name, rota.params);
+            const evento = emitter.emit({ type: 'tabPress', target: rota.key, canPreventDefault: true });
+            if (!ativa && !evento.defaultPrevented) navigateToTab(rota.key);
           };
-          const aoSegurar = () => navigation.emit({ type: 'tabLongPress', target: rota.key });
+          const aoSegurar = () => emitter.emit({ type: 'tabLongPress', target: rota.key });
 
           return (
             <Pressable

@@ -165,7 +165,7 @@ export default function Updater() {
   if (!visible) return null;
 
   return (
-    <Modal transparent visible={visible} animationType="fade">
+    <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']} transparent visible={visible} animationType="fade">
       <View style={styles.overlay}>
         <Animated.View style={[
           styles.modalContainer,

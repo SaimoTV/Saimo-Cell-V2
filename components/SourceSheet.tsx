@@ -34,7 +34,7 @@ export default function SourceSheet({ visible, title, sources, onPick, onClose }
   const baixaveis = sources.filter(s => !isHlsUrl(s.url)).length;
 
   return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']} transparent visible={visible} animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.container} onPress={() => {}}>
           <View style={styles.handle} />

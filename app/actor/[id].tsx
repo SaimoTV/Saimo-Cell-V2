@@ -83,7 +83,7 @@ export default function ActorScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+      <StatusBar barStyle="light-content" />
       
       <ScrollView 
         style={styles.scroll}

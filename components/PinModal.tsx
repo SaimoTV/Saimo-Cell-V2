@@ -158,7 +158,7 @@ export default function PinModal({
   const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'];
 
   return (
-    <Modal
+    <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']}
       visible={visible}
       transparent
       animationType="fade"

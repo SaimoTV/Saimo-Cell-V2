@@ -126,7 +126,7 @@ function SpeedSheet({
     onClose: () => void;
 }) {
     return (
-        <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+        <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']} transparent visible={visible} animationType="slide" onRequestClose={onClose}>
             <Pressable style={styles.sheetBackdrop} onPress={onClose}>
                 <Pressable style={styles.sheetContainer} onPress={() => {}}>
                     <View style={styles.sheetHandle} />
@@ -161,7 +161,7 @@ function SleepSheet({
     onClose: () => void;
 }) {
     return (
-        <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+        <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']} transparent visible={visible} animationType="slide" onRequestClose={onClose}>
             <Pressable style={styles.sheetBackdrop} onPress={onClose}>
                 <Pressable style={styles.sheetContainer} onPress={() => {}}>
                     <View style={styles.sheetHandle} />
@@ -212,7 +212,7 @@ function TrackSheet({
     onClose: () => void;
 }) {
     return (
-        <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+        <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']} transparent visible={visible} animationType="slide" onRequestClose={onClose}>
             <Pressable style={styles.sheetBackdrop} onPress={onClose}>
                 <Pressable style={styles.sheetContainer} onPress={() => {}}>
                     <View style={styles.sheetHandle} />
@@ -262,7 +262,7 @@ function ProgressBar({
     onSeekStart: (pct: number) => void;
     onSeekEnd: (pct: number) => void;
 }) {
-    const barRef = useRef<View>(null);
+    const barRef = useRef<React.ComponentRef<typeof View>>(null);
     const barLayoutRef = useRef<{ x: number; width: number }>({ x: 0, width: 1 });
     const [dragging, setDragging] = useState(false);
     const [dragPct, setDragPct] = useState(0);

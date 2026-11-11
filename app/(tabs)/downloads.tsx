@@ -306,7 +306,7 @@ export default function DownloadsScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
-            <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+            <StatusBar barStyle="light-content" />
 
             {/* Header */}
             <View style={styles.header}>
@@ -328,7 +328,7 @@ export default function DownloadsScreen() {
             ) : (
                 <FlatList
                     data={[]}
-                    renderItem={null}
+                    renderItem={() => null}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
                     ListHeaderComponent={

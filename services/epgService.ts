@@ -315,7 +315,7 @@ async function scanFile(file: FSFile, consume: (buf: string, frac: number) => nu
         let pending: Uint8Array | null = null;
         let rest = '';
         while (true) {
-            const chunk = handle.readBytes(CHUNK_BYTES);
+            const chunk = await handle.readBytes(CHUNK_BYTES);
             const last = chunk.length === 0;
             read += chunk.length;
             let text: string;

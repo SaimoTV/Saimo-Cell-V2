@@ -17,7 +17,7 @@ export default function TabLayout() {
         options={{
           title: 'TV',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="tv-outline" size={size} color={color} />
+            <Ionicons name="tv-outline" size={size} color={color as string} />
           ),
         }}
       />
@@ -26,7 +26,7 @@ export default function TabLayout() {
         options={{
           title: 'Favoritos',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="heart-outline" size={size} color={color} />
+            <Ionicons name="heart-outline" size={size} color={color as string} />
           ),
         }}
       />
@@ -35,7 +35,7 @@ export default function TabLayout() {
         options={{
           title: 'Filmes',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="film-outline" size={size} color={color} />
+            <Ionicons name="film-outline" size={size} color={color as string} />
           ),
         }}
       />
@@ -44,7 +44,7 @@ export default function TabLayout() {
         options={{
           title: 'Downloads',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="download-outline" size={size} color={color} />
+            <Ionicons name="download-outline" size={size} color={color as string} />
           ),
         }}
       />
@@ -53,7 +53,7 @@ export default function TabLayout() {
         options={{
           title: 'Eventos',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+            <Ionicons name="calendar-outline" size={size} color={color as string} />
           ),
         }}
       />
@@ -62,7 +62,7 @@ export default function TabLayout() {
         options={{
           title: 'Ajustes',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
+            <Ionicons name="settings-outline" size={size} color={color as string} />
           ),
         }}
       />

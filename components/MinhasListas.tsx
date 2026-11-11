@@ -143,7 +143,7 @@ export default function MinhasListas() {
         </TouchableOpacity>
       </View>
 
-      <Modal transparent visible={aberto} animationType="fade" onRequestClose={() => !baixando && setAberto(false)}>
+      <Modal supportedOrientations={['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']} transparent visible={aberto} animationType="fade" onRequestClose={() => { if (!baixando) setAberto(false); }}>
         <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.card}>
             <Text style={styles.titulo}>Adicionar lista</Text>

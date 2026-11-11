@@ -233,7 +233,7 @@ export default function SeriesDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="light-content" />
       
       <ScrollView 
         style={styles.scroll}
