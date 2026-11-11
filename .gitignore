@@ -54,4 +54,5 @@ ios/
 
 # Ignore large downloaded files if any ended up in root
 *.json.download
-*_temp.jsonbuild-ios/
+*_temp.json
+build-ios/
