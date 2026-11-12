@@ -79,9 +79,9 @@ nem o endereço.
   Os programas das próximas 30 h ficam salvos já separados
   (`epg-processado.json`, até 8 MB), e a próxima abertura mostra o guia sem
   reler o XML
-- **Eventos** (`services/eventos.ts`), como no TV Box: a agenda da embedtv
-  e a do monitor (`/v1/eventos`, canais de streaming como CazéTV, Disney+, Prime,
-  Paramount+, GOAT, ge tv, N Sports e SportyNet, sem repetir) com os placares da ESPN, só jogos que passam em algum canal da lista, em
+- **Eventos** (`services/eventos.ts`), como no TV Box: a agenda do Saimo
+  (`eventos-extra.json`) com os placares da ESPN; nenhum site de streaming de
+  terceiros é consultado (desde a 3.0.1 o app só toca o que a lista traz), só jogos que passam em algum canal da lista, em
   grupos (ao vivo agora, começa em breve, hoje, amanhã, próximos dias); placar
   e tempo de jogo atualizam a cada minuto com a aba aberta, e tocar abre o canal
 - **Apoie na abertura** (`services/apoieNaVersao.ts`): a tela Apoie o Saimo TV abre
