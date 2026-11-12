@@ -19,9 +19,6 @@ interface AudioTrackProps {
   initialPositionMs?: number;
 }
 
-const dadinhoCache = new Map<string, { resolved: string; timestamp: number }>();
-const DADINHO_CACHE_TTL_MS = 90 * 60 * 1000; // 90 min
-
 async function resolveAudioStream(source: TvSource, tvBase?: string): Promise<{
   uri: string;
   headers?: Record<string, string>;
@@ -33,46 +30,7 @@ async function resolveAudioStream(source: TvSource, tvBase?: string): Promise<{
   if (source.referer) headers.Referer = source.referer;
   if (source.userAgent) headers['User-Agent'] = source.userAgent;
 
-  // 1. Resolução dinâmica de Dadinho / TikTok CDN
-  if (uri.includes('dadinhodetapioca.fun/play/')) {
-    const cached = dadinhoCache.get(uri);
-    const now = Date.now();
-    if (cached && now - cached.timestamp < DADINHO_CACHE_TTL_MS) {
-      uri = cached.resolved;
-    } else {
-      try {
-        const resp = await fetch(uri, {
-          headers: {
-            Referer: 'https://rdcanais.org/',
-            'User-Agent':
-              source.userAgent ||
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-        });
-        if (resp.ok) {
-          const html = await resp.text();
-          const match = html.match(/STREAM_URLS\s*=\s*\[\s*"([^"]+)"/);
-          if (match && match[1]) {
-            uri = match[1].replace(/\\\//g, '/');
-            dadinhoCache.set(source.url, { resolved: uri, timestamp: now });
-          }
-        }
-      } catch (e) {
-        console.warn('[ConnectAudio] Erro ao resolver stream dadinho:', e);
-      }
-    }
-  }
-
-  // Se o stream for do dadinho ou tiktokcdn, injeta os cabeçalhos obrigatórios
-  if (uri.includes('dadinhodetapioca.fun') || uri.includes('tiktokcdn.live')) {
-    headers = {
-      ...headers,
-      Referer: 'https://dadinhodetapioca.fun/',
-      Origin: 'https://dadinhodetapioca.fun',
-    };
-  }
-
-  // 2. ClearKey DRM
+  // 1. ClearKey DRM
   let drm: { type: DRMType; licenseServer: string } | undefined = undefined;
   if (source.keyId && source.key) {
     const licenseUrl = await configureClearKey(`${source.keyId}:${source.key}`);
@@ -84,12 +42,10 @@ async function resolveAudioStream(source: TvSource, tvBase?: string): Promise<{
     }
   }
 
-  // 3. Determina o tipo do fluxo para ExoPlayer
+  // 2. Determina o tipo do fluxo para ExoPlayer
   const isHls =
     uri.split('?')[0].toLowerCase().endsWith('.m3u8') ||
-    uri.split('?')[0].toLowerCase().endsWith('.txt') ||
-    uri.includes('dadinhodetapioca.fun') ||
-    uri.includes('tiktokcdn.live');
+    uri.split('?')[0].toLowerCase().endsWith('.txt');
 
   const isDash =
     uri.split('?')[0].toLowerCase().endsWith('.mpd') ||

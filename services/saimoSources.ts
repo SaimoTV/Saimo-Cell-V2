@@ -165,9 +165,6 @@ function streamHeaders(stream: ChannelStream): Record<string, string> {
     'User-Agent': DEFAULT_USER_AGENT,
     ...(stream.headers ?? {}),
   };
-  if (stream.url.includes('s1001604.lat') && !headers.Referer) {
-    headers.Referer = 'https://meufut.top/';
-  }
   return headers;
 }
 
