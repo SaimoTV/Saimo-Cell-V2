@@ -2,11 +2,10 @@
  * Os jogos de hoje e dos próximos dias que passam em algum canal da lista,
  * com a mesma lógica da tela de Eventos do TV Box.
  *
- * Três fontes: a agenda da embedtv diz em que canal cada jogo passa; a do
- * monitor traz os jogos dos canais de streaming (CazéTV, Disney+, Prime,
- * Paramount+, GOAT, ge tv, N Sports, SportyNet) que a embedtv não tem, no
- * mesmo formato e com placar; os placares da ESPN dizem se já começou, o
- * placar e o tempo de jogo, e trazem escudos melhores. Só entra jogo que tem canal (sem canal não há o que
+ * Duas fontes: a agenda do monitor do Saimo (eventos-extra.json) diz em que
+ * canal cada jogo passa; os placares da ESPN dizem se já começou, o placar e o
+ * tempo de jogo, e trazem escudos melhores. Nenhum site de streaming de
+ * terceiros é consultado. Só entra jogo que tem canal (sem canal não há o que
  * assistir), e jogo encerrado sai.
  */
 import type { Channel } from '../types';
@@ -31,7 +30,6 @@ export const aoVivo = (j: Jogo, agora: number) =>
     j.estado === 'in' || (j.estado !== 'post' && agora >= j.inicio && agora <= j.fim);
 export const acabou = (j: Jogo, agora: number) => j.estado === 'post' || agora > j.fim;
 
-const EMBED = 'https://embedtv.cc/api/events';
 const STREAMING = 'https://saimo-tv.pages.dev/eventos-extra.json';
 const ESPN = [
     'soccer/bra.1', 'soccer/bra.2', 'soccer/bra.copa_do_brazil', 'soccer/conmebol.libertadores',
@@ -69,7 +67,7 @@ interface Placar {
 
 async function json(url: string): Promise<any | null> {
     try {
-        // Prazo de 8 s: a embedtv às vezes não responde, e a tela não espera por ela.
+        // Prazo de 8 s: a tela não espera por fonte que não responde.
         const controle = new AbortController();
         const relogio = setTimeout(() => controle.abort(), 8000);
         try {
@@ -185,22 +183,14 @@ function mesmoTime(a: string, b: string): boolean {
  * tiver mais de um minuto; no relógio da tela, só a cada três.
  */
 export async function buscarJogos(canais: Channel[], abrindo = false): Promise<Jogo[] | null> {
-    const [agenda, streaming, ...placares] = await Promise.all([
-        json(EMBED),
+    const [streaming, ...placares] = await Promise.all([
         doMonitor(abrindo),
         ...ESPN.map(l => json(`https://site.api.espn.com/apis/site/v2/sports/${l}/scoreboard`)),
     ]);
-    // Sem a embedtv a tela continua com os jogos do monitor; só some se as duas caírem.
-    if (!agenda && !streaming) return null;
+    // A agenda vem só do monitor do Saimo (com a ESPN para placar e escudos).
+    if (!streaming) return null;
     const espn = placares.filter(Boolean).flatMap(lerEspn);
-    const daEmbed = lerAgenda(agenda, canais);
-    // Jogo do monitor que a embedtv já tem (mesmos times, começo a menos de
-    // meia hora) não entra de novo.
-    const extras = lerAgenda(streaming, canais).filter(x => !daEmbed.some(e =>
-        Math.abs(e.inicio - x.inicio) < HORA / 2 &&
-        ((mesmoTime(e.casa, x.casa) && mesmoTime(e.fora, x.fora)) ||
-            (mesmoTime(e.casa, x.fora) && mesmoTime(e.fora, x.casa)))));
-    return [...daEmbed, ...extras].map(jogo => {
+    return lerAgenda(streaming, canais).map(jogo => {
         // O mesmo jogo na ESPN: mesmos times (em qualquer ordem) e começo
         // a menos de quatro horas um do outro.
         const par = espn.find(e =>

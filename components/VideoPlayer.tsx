@@ -175,56 +175,18 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
     };
   }, [activeChannel, sourceIndex]);
 
-  const [resolvedDadinho, setResolvedDadinho] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!activeStream.url.includes('dadinhodetapioca.fun/play/')) {
-      setResolvedDadinho(null);
-      return;
-    }
-    let cancelled = false;
-    fetch(activeStream.url, {
-      headers: { Referer: 'https://rdcanais.org/' },
-    })
-      .then((res) => res.text())
-      .then((html) => {
-        if (cancelled) return;
-        const match = html.match(/STREAM_URLS\s*=\s*\[\s*"([^"]+)"/);
-        if (match) {
-          const m3u8 = match[1].replace(/\\\//g, '/');
-          setResolvedDadinho(m3u8);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [activeStream.url]);
-
   // A fonte do player num objeto estável: um objeto novo a cada render fazia
   // o componente do vídeo comparar e reenviar a fonte a cada atualização.
   const fonteDoPlayer = useMemo(() => {
-    const isDadinho = activeStream.url.includes('dadinhodetapioca.fun');
-    const uri = (isDadinho && resolvedDadinho) ? resolvedDadinho : activeStream.url;
+    const uri = activeStream.url;
     const baseHeaders: Record<string, string> = {
       Accept: '*/*',
       ...(activeStream.headers ?? {}),
     };
-    if (uri.includes('s1001604.lat') && !baseHeaders.Referer) {
-      baseHeaders.Referer = 'https://meufut.top/';
-    }
-    if ((uri.includes('s25-cloudfront-net.lat') || uri.includes('cloudfront-net.lat')) && !baseHeaders.Referer) {
-      baseHeaders.Referer = 'https://w7.embedtv.cc/';
-    }
-    if (uri.includes('embedtvproxy.workers.dev') && !baseHeaders.Referer) {
-      baseHeaders.Referer = 'https://nexustvplay.bbroot.com/';
-      baseHeaders.Origin = 'https://nexustvplay.bbroot.com';
-    }
-    const headers = isDadinho
-      ? { ...baseHeaders, Referer: 'https://dadinhodetapioca.fun/', Origin: 'https://dadinhodetapioca.fun' }
-      : baseHeaders;
+    // Cabeçalhos só os da própria lista (referer/agente de cada fonte).
+    const headers = baseHeaders;
     const cleanPath = uri.split('?')[0].toLowerCase();
-    const isHls = cleanPath.endsWith('.m3u8') || cleanPath.endsWith('.txt') || isDadinho;
+    const isHls = cleanPath.endsWith('.m3u8') || cleanPath.endsWith('.txt');
     return {
       uri,
       headers,
@@ -233,7 +195,7 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
       // `.m3u8` e `.txt` aqui vai explicitamente para o demuxer HLS.
       type: isHls ? 'm3u8' : undefined,
     };
-  }, [activeStream.url, activeStream.headers, resolvedDadinho]);
+  }, [activeStream.url, activeStream.headers]);
 
   const client = useRemoteMediaClient();
   const videoRef = useRef<VideoRef>(null);
