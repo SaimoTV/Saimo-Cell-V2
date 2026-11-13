@@ -19,7 +19,8 @@ export interface Jogo {
     ligaLogo: string;
     inicio: number;
     fim: number;
-    canal: Channel;
+    /** Sem canal na lista: o jogo aparece como "Sem canal" e não abre player. */
+    canal?: Channel;
     /** "pre", "in" ou "post", quando a ESPN conhece o jogo. */
     estado: string;
     placar: string;
@@ -116,9 +117,7 @@ function lerAgenda(arr: any, canais: Channel[]): Jogo[] {
     for (const o of arr) {
         try {
             const player = o?.players?.[0];
-            if (!player) continue;
-            const canal = canalDo(player, canais);
-            if (!canal) continue;
+            const canal = player ? canalDo(player, canais) : undefined;
             const inicio = new Date(o.time_start).getTime();
             if (isNaN(inicio)) continue;
             const fimLido = o.time_end ? new Date(o.time_end).getTime() : NaN;

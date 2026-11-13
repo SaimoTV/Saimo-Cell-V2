@@ -70,20 +70,24 @@ const CartaoJogo = React.memo(function CartaoJogo({ jogo, agora }: { jogo: Jogo;
   const isSaimoConnected = useConnectStore((s) => s.status === 'connected' && !!s.connectedTv);
   const connectedTv = useConnectStore((s) => s.connectedTv);
 
+  const canal = jogo.canal;
   const abrirNoCelular = () => {
-    router.push({ pathname: '/player/[id]', params: { id: jogo.canal.id } });
+    if (!canal) return;
+    router.push({ pathname: '/player/[id]', params: { id: canal.id } });
   };
 
   const abrirNaTv = () => {
-    saimoConnect.tuneChannel(jogo.canal.name);
-    Alert.alert('Saimo Connect', `Sintonizando ${jogo.canal.name} em ${connectedTv?.name || 'sua TV'}!`);
+    if (!canal) return;
+    saimoConnect.tuneChannel(canal.name);
+    Alert.alert('Saimo Connect', `Sintonizando ${canal.name} em ${connectedTv?.name || 'sua TV'}!`);
   };
 
   const abrir = () => {
+    if (!canal) return;
     if (isSaimoConnected) {
       Alert.alert(
         'Assistir Evento',
-        `Onde deseja assistir a este jogo?\n\n${jogo.casa} x ${jogo.fora}\nCanal: ${jogo.canal.name}`,
+        `Onde deseja assistir a este jogo?\n\n${jogo.casa} x ${jogo.fora}\nCanal: ${canal?.name}`,
         [
           {
             text: `Na TV Box (${connectedTv?.name || 'TV'})`,
@@ -108,8 +112,9 @@ const CartaoJogo = React.memo(function CartaoJogo({ jogo, agora }: { jogo: Jogo;
     <TouchableOpacity
       style={[styles.card, vivo && styles.cardVivo]}
       onPress={abrir}
-      activeOpacity={0.8}
-      accessibilityLabel={`${jogo.casa} x ${jogo.fora}, no canal ${jogo.canal.name}`}
+      disabled={!canal}
+      activeOpacity={canal ? 0.8 : 1}
+      accessibilityLabel={`${jogo.casa} x ${jogo.fora}, ${canal ? `no canal ${canal.name}` : 'sem canal'}`}
     >
       <View style={styles.cardHeader}>
         <View style={styles.leagueInfo}>
@@ -152,16 +157,16 @@ const CartaoJogo = React.memo(function CartaoJogo({ jogo, agora }: { jogo: Jogo;
       </View>
 
       <View style={styles.channelRow}>
-        {jogo.canal.logo ? (
-          <Image source={{ uri: jogo.canal.logo }} style={styles.channelLogo} contentFit="contain" />
+        {canal?.logo ? (
+          <Image source={{ uri: canal.logo }} style={styles.channelLogo} contentFit="contain" />
         ) : (
           <Ionicons name="tv-outline" size={18} color={Colors.textSecondary} />
         )}
-        <Text style={styles.channelName} numberOfLines={1}>{jogo.canal.name}</Text>
-        <View style={styles.playPill}>
+        <Text style={styles.channelName} numberOfLines={1}>{canal ? canal.name : 'Sem canal'}</Text>
+        {canal && <View style={styles.playPill}>
           <Ionicons name="play" size={14} color="#FFFFFF" />
           <Text style={styles.playText}>Assistir</Text>
-        </View>
+        </View>}
       </View>
     </TouchableOpacity>
   );
