@@ -2,10 +2,13 @@
   "expo": {
     "name": "Saimo-TV",
     "slug": "saimo-v2",
-    "version": "3.0.4",
+    "version": "3.0.5",
     "orientation": "default",
     "icon": "./assets/images/saimo_tv_logo.png",
-    "scheme": "saimo",
+    "scheme": [
+      "saimo",
+      "stremio"
+    ],
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
@@ -33,7 +36,7 @@
           "_CC1AD845._googlecast._tcp"
         ]
       },
-      "buildNumber": "3.0.4",
+      "buildNumber": "3.0.5",
       "icon": "./assets/images/saimo_tv_icon_ios.png",
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -76,7 +79,7 @@
         "backgroundColor": "#0A0A0F"
       },
       "package": "com.saimo.tv",
-      "versionCode": 30004,
+      "versionCode": 30005,
       "permissions": [
         "INTERNET",
         "VIBRATE",

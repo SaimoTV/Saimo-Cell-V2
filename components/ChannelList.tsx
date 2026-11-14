@@ -1,4 +1,5 @@
 import { ENDERECOS_SAIMO } from '../constants/recursos';
+import { pedirAbrirAddons } from '../services/addons';
 import { pedirAdicionarLista } from '../services/minhasListas';
 import React, { memo, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
@@ -80,9 +81,17 @@ const ChannelList = memo(({ channels, carregando = false, semEndereco = false, r
         >
           <Text style={styles.emptyButtonText}>Adicionar lista</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.emptyButton, styles.emptyButtonSecondary]}
+          onPress={() => { pedirAbrirAddons(); router.push('/(tabs)/settings' as any); }}
+          accessibilityRole="button"
+          testID="canais-configurar-addons"
+        >
+          <Text style={styles.emptyButtonText}>Addons e Debrid</Text>
+        </TouchableOpacity>
         {ENDERECOS_SAIMO && (
           <TouchableOpacity
-            style={[styles.emptyButton, { marginTop: 12 }]}
+            style={[styles.emptyButton, styles.emptyButtonSecondary]}
             onPress={() => router.push('/(tabs)/settings' as any)}
             accessibilityRole="button"
             testID="canais-abrir-ajustes"
@@ -164,6 +173,12 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 22,
     paddingVertical: 12,
+  },
+  emptyButtonSecondary: {
+    marginTop: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   emptyButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   emptyText: {

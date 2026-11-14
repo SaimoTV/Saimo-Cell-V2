@@ -19,12 +19,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
 import { getItemAPI } from '../../services/apiService';
-import { getTMDBDetails } from '../../services/tmdbService';
+import { carregarEpisodiosTemporadaTmdb, getTMDBDetails } from '../../services/tmdbService';
 import { useMediaStore } from '../../stores/mediaStore';
 import { downloadManager } from '../../services/downloadManager';
 import DownloadButton from '../../components/DownloadButton';
 import CastAction from '../../components/CastAction';
 import SourceSheet from '../../components/SourceSheet';
+import AddonStreamsModal, { type AddonStreamPicked } from '../../components/AddonStreamsModal';
+import { aoMudarAddons, carregarAddons, getAddonsAtivos } from '../../services/addons';
 import { primeiraFonteBaixavel } from '../../services/downloadUtils';
 import { parseVodId } from '../../services/saimoSources';
 import type { MediaItem, Episode, CastMember } from '../../types';
@@ -61,6 +63,38 @@ export default function SeriesDetailScreen() {
   const [favorite, setFavorite] = useState(false);
   const [overviewExpanded, setOverviewExpanded] = useState(false);
   const [sourceSheet, setSourceSheet] = useState<Episode | null>(null);
+  const [addonEpSheet, setAddonEpSheet] = useState<{ ep: Episode; season: string } | null>(null);
+  const [temAddons, setTemAddons] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setTemAddons(getAddonsAtivos().length > 0);
+    carregarAddons().then(sync);
+    return aoMudarAddons(sync);
+  }, []);
+
+  // Carrega temporada sob demanda para séries vindas de descoberta TMDB (> temporada 6)
+  useEffect(() => {
+    if (!series?.id.startsWith('tmdb|') || !series.tmdb?.id) return;
+    const seasonNum = Number(selectedSeason);
+    const epsAtuais = series.episodes?.[selectedSeason];
+    if (!seasonNum || !epsAtuais || epsAtuais.length === 0) return;
+    if (epsAtuais[0].logo || !epsAtuais[0].name.startsWith('Episódio ')) return;
+    let ativo = true;
+    carregarEpisodiosTemporadaTmdb(series.tmdb.id, seasonNum).then((lista) => {
+      if (!ativo || lista.length === 0) return;
+      setSeries((atual) => {
+        if (!atual) return atual;
+        return {
+          ...atual,
+          episodes: {
+            ...(atual.episodes ?? {}),
+            [selectedSeason]: lista,
+          },
+        };
+      });
+    });
+    return () => { ativo = false; };
+  }, [series?.id, series?.tmdb?.id, selectedSeason]);
 
   // Carregar série
   useEffect(() => {
@@ -121,34 +155,42 @@ export default function SeriesDetailScreen() {
     setFavorite(!favorite);
   }, [series, favorite, addFavorite, removeFavorite]);
 
-  const handlePlayEpisode = useCallback((ep: Episode, season: string) => {
-    if (!series) return;
-    setSeriesProgress(series.id, parseInt(season), ep.episode, ep.id);
-
-    // Descobre o próximo episódio (mesmo season ou próximo season)
-    const seasonEps = series.episodes?.[season] || [];
+  const encontrarProximoEp = useCallback((ep: Episode, season: string): { nextEp: Episode | null; nextSeason: string } => {
+    const seasonEps = series?.episodes?.[season] || [];
     const currentIndex = seasonEps.findIndex(e => e.id === ep.id);
-    let nextEp: Episode | null = null;
-    let nextSeason = season;
-
     if (currentIndex >= 0 && currentIndex < seasonEps.length - 1) {
-      nextEp = seasonEps[currentIndex + 1];
-    } else {
-      // Tenta avançar para próxima temporada
-      const seasonNums = Object.keys(series.episodes || {}).sort((a, b) => parseInt(a) - parseInt(b));
-      const seasonIdx = seasonNums.indexOf(season);
-      if (seasonIdx >= 0 && seasonIdx < seasonNums.length - 1) {
-        nextSeason = seasonNums[seasonIdx + 1];
-        const nextSeasonEps = series.episodes?.[nextSeason] || [];
-        if (nextSeasonEps.length > 0) nextEp = nextSeasonEps[0];
-      }
+      return { nextEp: seasonEps[currentIndex + 1], nextSeason: season };
     }
+    const seasonNums = Object.keys(series?.episodes || {}).sort((a, b) => parseInt(a) - parseInt(b));
+    const seasonIdx = seasonNums.indexOf(season);
+    if (seasonIdx >= 0 && seasonIdx < seasonNums.length - 1) {
+      const nextSeason = seasonNums[seasonIdx + 1];
+      const nextSeasonEps = series?.episodes?.[nextSeason] || [];
+      if (nextSeasonEps.length > 0) return { nextEp: nextSeasonEps[0], nextSeason };
+    }
+    return { nextEp: null, nextSeason: season };
+  }, [series]);
+
+  const handlePlayEpisode = useCallback((ep: Episode, season: string, urlOverride?: string) => {
+    if (!series) return;
+    const urlPrincipal = urlOverride || ep.url;
+    if (!urlPrincipal) {
+      if (temAddons) {
+        setAddonEpSheet({ ep, season });
+      } else {
+        Alert.alert('Indisponível', 'Nenhuma fonte configurada para este episódio.');
+      }
+      return;
+    }
+
+    setSeriesProgress(series.id, parseInt(season), ep.episode, ep.id);
+    const { nextEp, nextSeason } = encontrarProximoEp(ep, season);
 
     router.push({
       pathname: '/media-player/[id]' as any,
       params: {
         id: ep.id,
-        url: encodeURIComponent(ep.url),
+        url: encodeURIComponent(urlPrincipal),
         sources: encodeURIComponent(JSON.stringify((ep.sources ?? []).map(source => source.url))),
         sourceLabels: encodeURIComponent(JSON.stringify(rotulosDe(ep.sources))),
         title: `${series.name} - T${season} E${ep.episode}`,
@@ -156,9 +198,11 @@ export default function SeriesDetailScreen() {
         season,
         episode: String(ep.episode),
         tmdb: series.tmdb?.id ? String(series.tmdb.id) : '',
+        imdbId: series.imdbId || series.tmdb?.imdbId || '',
+        addonRawId: series.addonRawId || '',
         ...(nextEp && {
           nextId: nextEp.id,
-          nextUrl: encodeURIComponent(nextEp.url),
+          nextUrl: encodeURIComponent(nextEp.url || ''),
           nextSources: encodeURIComponent(JSON.stringify((nextEp.sources ?? []).map(source => source.url))),
           nextSourceLabels: encodeURIComponent(JSON.stringify(rotulosDe(nextEp.sources))),
           nextTitle: `${series.name} - T${nextSeason} E${nextEp.episode}`,
@@ -167,7 +211,80 @@ export default function SeriesDetailScreen() {
         }),
       }
     });
-  }, [series, router, setSeriesProgress]);
+  }, [series, temAddons, router, setSeriesProgress, encontrarProximoEp]);
+
+  const handlePlayEpisodeAddonPicked = useCallback((picked: AddonStreamPicked, ep: Episode, season: string) => {
+    if (!series) return;
+    setSeriesProgress(series.id, parseInt(season), ep.episode, ep.id);
+    const { nextEp, nextSeason } = encontrarProximoEp(ep, season);
+
+    const directStreams = picked.allStreams.filter((s) => !!s.url);
+    const otherUrls = directStreams.map((s) => s.url!).filter((u) => u && u !== picked.resolvedUrl);
+    const vodUrls = (ep.sources ?? []).map((s) => s.url).filter((u) => u && u !== picked.resolvedUrl);
+    const allUrls = [picked.resolvedUrl, ...otherUrls, ...vodUrls];
+
+    const labelsMap: Record<string, string> = rotulosDe(ep.sources);
+    const headersMap: Record<string, Record<string, string>> = {};
+    const extrasMap: Record<string, {
+      subtitles?: typeof picked.resolved.subtitles;
+      bingeGroup?: string;
+      filename?: string;
+      videoSize?: number;
+      videoHash?: string;
+    }> = {};
+
+    const registrar = (url: string, item: typeof picked.resolved) => {
+      labelsMap[url] = item.subtitle ? `${item.title} · ${item.subtitle}` : item.title;
+      if (item.headers) headersMap[url] = item.headers;
+      extrasMap[url] = {
+        ...(item.subtitles.length > 0 ? { subtitles: item.subtitles } : {}),
+        ...(item.bingeGroup ? { bingeGroup: item.bingeGroup } : {}),
+        ...(item.filename ? { filename: item.filename } : {}),
+        ...(typeof item.videoSize === 'number' ? { videoSize: item.videoSize } : {}),
+        ...(item.videoHash ? { videoHash: item.videoHash } : {}),
+      };
+    };
+
+    registrar(picked.resolvedUrl, picked.resolved);
+    for (const s of directStreams) {
+      if (s.url) registrar(s.url, s);
+    }
+
+    router.push({
+      pathname: '/media-player/[id]' as any,
+      params: {
+        id: ep.id,
+        url: encodeURIComponent(picked.resolvedUrl),
+        sources: encodeURIComponent(JSON.stringify(allUrls)),
+        sourceLabels: encodeURIComponent(JSON.stringify(labelsMap)),
+        sourceHeaders: encodeURIComponent(JSON.stringify(headersMap)),
+        sourceExtras: encodeURIComponent(JSON.stringify(extrasMap)),
+        subtitles: picked.resolved.subtitles.length > 0
+          ? encodeURIComponent(JSON.stringify(picked.resolved.subtitles))
+          : '',
+        bingeGroup: picked.resolved.bingeGroup || '',
+        filename: picked.resolved.filename || '',
+        videoSize: picked.resolved.videoSize ? String(picked.resolved.videoSize) : '',
+        videoHash: picked.resolved.videoHash || '',
+        title: `${series.name} - T${season} E${ep.episode}`,
+        seriesId: series.id,
+        season,
+        episode: String(ep.episode),
+        tmdb: series.tmdb?.id ? String(series.tmdb.id) : '',
+        imdbId: picked.imdbId || series.imdbId || series.tmdb?.imdbId || '',
+        addonRawId: series.addonRawId || '',
+        ...(nextEp && {
+          nextId: nextEp.id,
+          nextUrl: encodeURIComponent(nextEp.url || ''),
+          nextSources: encodeURIComponent(JSON.stringify((nextEp.sources ?? []).map(source => source.url))),
+          nextSourceLabels: encodeURIComponent(JSON.stringify(rotulosDe(nextEp.sources))),
+          nextTitle: `${series.name} - T${nextSeason} E${nextEp.episode}`,
+          nextSeason,
+          nextEpisode: String(nextEp.episode),
+        }),
+      },
+    });
+  }, [series, router, setSeriesProgress, encontrarProximoEp]);
 
   const handleContinue = useCallback(() => {
     if (!series || !progress) return;
@@ -574,7 +691,16 @@ export default function SeriesDetailScreen() {
                   };
                 }}
               />
-              {series && (
+              {temAddons && (
+                <TouchableOpacity
+                  onPress={() => setAddonEpSheet({ ep, season: selectedSeason })}
+                  accessibilityLabel="Escolher stream nos addons"
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons name="extension-puzzle-outline" size={20} color={Colors.primary} />
+                </TouchableOpacity>
+              )}
+              {series && !!ep.url && (
                 <DownloadButton
                   itemId={ep.id}
                   size="small"
@@ -601,6 +727,23 @@ export default function SeriesDetailScreen() {
         {/* Bottom padding */}
         <View style={{ height: insets.bottom + 40 }} />
       </ScrollView>
+
+      {series && addonEpSheet && (
+        <AddonStreamsModal
+          visible={!!addonEpSheet}
+          title={`${series.name} - T${addonEpSheet.season} E${addonEpSheet.ep.episode}`}
+          type="series"
+          tmdbId={series.tmdb?.id}
+          imdbId={series.imdbId || series.tmdb?.imdbId}
+          addonRawId={series.addonRawId}
+          season={Number(addonEpSheet.season) || 1}
+          episode={addonEpSheet.ep.episode}
+          vodSources={addonEpSheet.ep.sources}
+          onPickVod={(url) => handlePlayEpisode(addonEpSheet.ep, addonEpSheet.season, url)}
+          onPickAddon={(picked) => handlePlayEpisodeAddonPicked(picked, addonEpSheet.ep, addonEpSheet.season)}
+          onClose={() => setAddonEpSheet(null)}
+        />
+      )}
     </View>
   );
 }

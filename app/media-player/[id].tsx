@@ -31,7 +31,15 @@ import {
     ehEnderecoDinamico,
     resolverDinamica,
 } from '../../services/playerStrategies';
+import {
+    buscarStreamsAddons,
+    mesclarHeadersReproducao,
+    selecionarFontePorBingeGroup,
+    selecionarStreamPorBingeGroup,
+} from '../../services/addons';
+import { resolverTorrentDebrid } from '../../services/debrid';
 import { getItemAPI } from '../../services/apiService';
+import type { AddonSubtitle, MediaSource } from '../../types';
 import * as telemetria from '../../services/telemetria';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -396,6 +404,10 @@ export default function MediaPlayerScreen() {
         nextId?: string; nextUrl?: string; nextTitle?: string;
         nextSeason?: string; nextEpisode?: string;
         sources?: string; nextSources?: string; sourceLabels?: string; nextSourceLabels?: string;
+        sourceHeaders?: string; sourceExtras?: string;
+        subtitles?: string; bingeGroup?: string;
+        imdbId?: string; addonRawId?: string;
+        filename?: string; videoSize?: string; videoHash?: string;
         offline?: string;
         tmdb?: string; episode?: string;
     }>();
@@ -433,32 +445,70 @@ export default function MediaPlayerScreen() {
         } catch { /* usa a URL principal */ }
         return Array.from(new Set([decodedUrl, ...provided].filter(Boolean)));
     }, [decodedUrl, params.sources]);
-    // Versão (dub/leg) de cada endereço: a preferência nunca troca de versão.
-    const rotulos = useMemo(() => {
+    // Versão (dub/leg) e metadados/headers de cada endereço.
+    const rotulosIniciais = useMemo(() => {
         const ler = (v?: string): Record<string, string> => {
             try { return v ? JSON.parse(decodeURIComponent(v)) : {}; } catch { return {}; }
         };
         return { ...ler(params.sourceLabels), ...ler(params.nextSourceLabels) };
     }, [params.sourceLabels, params.nextSourceLabels]);
+    const headersMapRef = useRef<Record<string, Record<string, string>>>({});
+    const extrasMapRef = useRef<Record<string, {
+        subtitles?: AddonSubtitle[];
+        bingeGroup?: string;
+        filename?: string;
+        videoSize?: number;
+        videoHash?: string;
+    }>>({});
+    const rotulosRef = useRef<Record<string, string>>(rotulosIniciais);
+
+    useMemo(() => {
+        rotulosRef.current = { ...rotulosIniciais, ...rotulosRef.current };
+        try {
+            if (params.sourceHeaders) {
+                const parsed = JSON.parse(decodeURIComponent(params.sourceHeaders)) as Record<string, Record<string, string>>;
+                headersMapRef.current = { ...parsed, ...headersMapRef.current };
+            }
+        } catch { /* ignora headers malformados */ }
+        try {
+            if (params.sourceExtras) {
+                const parsed = JSON.parse(decodeURIComponent(params.sourceExtras));
+                extrasMapRef.current = { ...parsed, ...extrasMapRef.current };
+            }
+        } catch { /* ignora extras malformados */ }
+    }, [rotulosIniciais, params.sourceHeaders, params.sourceExtras]);
+
+    const inlineSubtitlesIniciais = useMemo<AddonSubtitle[]>(() => {
+        try {
+            return params.subtitles ? JSON.parse(decodeURIComponent(params.subtitles)) : [];
+        } catch {
+            return [];
+        }
+    }, [params.subtitles]);
+
+    const rotulos = rotulosRef.current;
     const comVersao = useCallback(
-        (urls: string[]) => urls.map((url) => ({ url, versao: rotulos[url] })),
-        [rotulos],
+        (urls: string[]) => urls.map((url) => ({ url, versao: rotulosRef.current[url] })),
+        [],
     );
     const isOffline = params.offline === '1' || decodedUrl.startsWith('file://');
 
     // ── Episode state ──────────────────────────────────────────────────────
     const [currentTitle, setCurrentTitle] = useState(params.title || '');
     const [activeUrl, setActiveUrl] = useState(decodedUrl);
+    const [activeSeasonNum, setActiveSeasonNum] = useState(Number(params.season || 0));
+    const [activeEpisodeNum, setActiveEpisodeNum] = useState(Number(routeParams.episode || 0));
+    const activeBingeGroupRef = useRef<string | undefined>(params.bingeGroup || undefined);
     const [playbackSources, setPlaybackSources] = useState(sourceUrls);
     const [selectedSource, setSelectedSource] = useState(0);
     const sourceIndexRef = useRef(0);
     const [nextEpisode] = useState<{
         id: string; url: string; title: string; season: string; episode: string;
     } | null>(
-        params.nextId && params.nextUrl
+        params.nextId && (params.nextUrl || params.imdbId || params.addonRawId || routeParams.tmdb || params.nextSeason)
             ? {
                   id: params.nextId,
-                  url: decodeURIComponent(params.nextUrl),
+                  url: params.nextUrl ? decodeURIComponent(params.nextUrl) : '',
                   title: params.nextTitle || '',
                   season: params.nextSeason || '',
                   episode: params.nextEpisode || '',
@@ -473,12 +523,11 @@ export default function MediaPlayerScreen() {
         const tmdb = Number(routeParams.tmdb || 0);
         if (!tmdb) return;
         let vivo = true;
-        buscarPulos(tmdb, Number(params.season || 0), Number(routeParams.episode || 0))
+        buscarPulos(tmdb, activeSeasonNum, activeEpisodeNum)
             .then(t => { if (vivo) setTrechos(t); });
         return () => { vivo = false; };
-    }, [routeParams.tmdb, params.season, routeParams.episode]);
-    // Legendas do OpenSubtitles pelo id do TMDB; se a pessoa já escolhera um
-    // idioma antes, a primeira versão dele liga sozinha.
+    }, [routeParams.tmdb, activeSeasonNum, activeEpisodeNum]);
+    // Legendas (inline do stream + addons Stremio + OpenSubtitles)
     const aplicarLegenda = useCallback(async (opcao: LegendaOpcao | null, atraso = 0, guardar = true) => {
         if (!opcao) {
             setLegendaExt(null);
@@ -510,11 +559,24 @@ export default function MediaPlayerScreen() {
         setLegendaExt(null);
         setLegendaUri(null);
         setLegendaAtraso(0);
-        if (!tmdb) return;
+        const extraAtual = extrasMapRef.current[activeUrl];
+        const inlineSubs = extraAtual?.subtitles?.length ? extraAtual.subtitles : inlineSubtitlesIniciais;
+        if (!tmdb && !params.imdbId && !params.addonRawId && inlineSubs.length === 0) return;
+
         let vivo = true;
-        const temporada = Number(params.season || 0);
-        const serie = !!params.seriesId || temporada > 0;
-        buscarLegendas(tmdb, serie, temporada, Number(routeParams.episode || 0)).then(async (lista) => {
+        const serie = !!params.seriesId || activeSeasonNum > 0;
+        const filename = extraAtual?.filename || params.filename || undefined;
+        const videoSize = extraAtual?.videoSize ?? (params.videoSize ? Number(params.videoSize) : undefined);
+        const videoHash = extraAtual?.videoHash || params.videoHash || undefined;
+
+        buscarLegendas(tmdb || undefined, serie, activeSeasonNum, activeEpisodeNum, {
+            imdbId: params.imdbId || undefined,
+            addonRawId: params.addonRawId || undefined,
+            inlineSubtitles: inlineSubs,
+            filename,
+            videoSize,
+            videoHash,
+        }).then(async (lista) => {
             if (!vivo) return;
             setLegendasExt(lista);
             const idioma = await idiomaGuardado();
@@ -523,7 +585,7 @@ export default function MediaPlayerScreen() {
         });
         return () => { vivo = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [routeParams.tmdb, params.season, routeParams.episode, params.seriesId, params.id]);
+    }, [routeParams.tmdb, activeSeasonNum, activeEpisodeNum, params.seriesId, params.id, activeUrl, params.imdbId, params.addonRawId]);
     const [nextCountdown, setNextCountdown] = useState(NEXT_EP_COUNTDOWN);
     const [nextCardDismissed, setNextCardDismissed] = useState(false);
 
@@ -1174,11 +1236,15 @@ export default function MediaPlayerScreen() {
         }
         if (nextCountdownRef.current) clearInterval(nextCountdownRef.current);
         setShowNextCard(false);
-        if (params.seriesId && params.season) {
+        const proxSeasonNum = parseInt(next.season) || activeSeasonNum;
+        const proxEpisodeNum = parseInt(next.episode) || (activeEpisodeNum + 1);
+        setActiveSeasonNum(proxSeasonNum);
+        setActiveEpisodeNum(proxEpisodeNum);
+        if (params.seriesId && next.season) {
             setSeriesProgress(
                 params.seriesId,
-                parseInt(params.season),
-                parseInt(next.episode),
+                proxSeasonNum,
+                proxEpisodeNum,
                 next.id,
             );
         }
@@ -1191,24 +1257,110 @@ export default function MediaPlayerScreen() {
         strategyIdxRef.current = 0;
         setStrategyIdx(0);
         hasFetchedFreshUrl.current = false;
-        setActiveUrl(next.url);
-        setResolvedUrl(next.url);
-        let nextList = [next.url];
+
+        let nextList: string[] = [];
         try {
             const extra = params.nextSources ? JSON.parse(decodeURIComponent(params.nextSources)) : [];
             nextList = Array.from(new Set([next.url, ...extra].filter(Boolean))) as string[];
-        } catch { /* mantém a URL principal do próximo episódio */ }
-        // Mesma fonte do episódio atual, se o próximo a tiver (host, depois posição).
-        const preferida = fontePreferida(params.seriesId, comVersao(nextList));
-        setPlaybackSources(nextList);
-        sourceIndexRef.current = preferida;
-        setSelectedSource(preferida);
-        setActiveUrl(nextList[preferida]);
-        setResolvedUrl(nextList[preferida]);
-        // O episódio seguinte segue direto na primeira fonte: abrir a escolha
-        // aqui parava a maratona a cada episódio. Trocar continua no botão Fonte.
-        setVideoKey((k) => k + 1);
-    }, [resolvedNextEpisode, params.seriesId, params.season, params.nextSources, comVersao, setSeriesProgress, isOffline, items, router]);
+        } catch {
+            nextList = next.url ? [next.url] : [];
+        }
+
+        const aplicarLista = (urls: string[], indiceInicial: number) => {
+            if (!isMountedRef.current) return;
+            if (!urls.length) {
+                setHasError(true);
+                setIsLoading(false);
+                setErrorMsg('Nenhuma fonte encontrada para o próximo episódio.');
+                return;
+            }
+            const alvoUrl = urls[indiceInicial] || urls[0];
+            setPlaybackSources(urls);
+            sourceIndexRef.current = indiceInicial;
+            setSelectedSource(indiceInicial);
+            setActiveUrl(alvoUrl);
+            setResolvedUrl(alvoUrl);
+            const binge = extrasMapRef.current[alvoUrl]?.bingeGroup;
+            if (binge) activeBingeGroupRef.current = binge;
+            setVideoKey((k) => k + 1);
+        };
+
+        const bingeAtual = activeBingeGroupRef.current;
+        if (!nextList.length || bingeAtual) {
+            void (async () => {
+                try {
+                    const res = await buscarStreamsAddons({
+                        type: 'series',
+                        imdbId: params.imdbId || undefined,
+                        tmdbId: Number(routeParams.tmdb || 0) || undefined,
+                        addonRawId: params.addonRawId || undefined,
+                        season: proxSeasonNum,
+                        episode: proxEpisodeNum,
+                    });
+                    if (!isMountedRef.current) return;
+                    const escolhido = selecionarStreamPorBingeGroup(res.streams, bingeAtual);
+                    let urlEscolhida = escolhido?.url;
+                    if (escolhido && !urlEscolhida && escolhido.kind === 'torrent' && escolhido.infoHash) {
+                        const dl = await resolverTorrentDebrid({
+                            infoHash: escolhido.infoHash,
+                            fileIdx: escolhido.fileIdx,
+                            sources: escolhido.sources,
+                            filename: escolhido.filename,
+                        });
+                        urlEscolhida = dl.url;
+                    }
+                    const diretosAddon: string[] = [];
+                    for (const s of res.streams) {
+                        const u = s === escolhido && urlEscolhida ? urlEscolhida : s.url;
+                        if (!u) continue;
+                        diretosAddon.push(u);
+                        rotulosRef.current[u] = s.subtitle ? `${s.title} · ${s.subtitle}` : s.title;
+                        if (s.headers) headersMapRef.current[u] = s.headers;
+                        extrasMapRef.current[u] = {
+                            ...(s.subtitles.length > 0 ? { subtitles: s.subtitles } : {}),
+                            ...(s.bingeGroup ? { bingeGroup: s.bingeGroup } : {}),
+                            ...(s.filename ? { filename: s.filename } : {}),
+                            ...(typeof s.videoSize === 'number' ? { videoSize: s.videoSize } : {}),
+                            ...(s.videoHash ? { videoHash: s.videoHash } : {}),
+                        };
+                    }
+                    const combinados = Array.from(new Set([
+                        ...(urlEscolhida ? [urlEscolhida] : []),
+                        ...diretosAddon,
+                        ...nextList,
+                    ]));
+                    if (combinados.length > 0) {
+                        aplicarLista(combinados, 0);
+                        return;
+                    }
+                } catch {
+                    // fallback para nextList do VOD se existir
+                }
+                if (nextList.length > 0) {
+                    const preferida = fontePreferida(params.seriesId, comVersao(nextList));
+                    aplicarLista(nextList, preferida);
+                } else if (isMountedRef.current) {
+                    setHasError(true);
+                    setIsLoading(false);
+                    setErrorMsg('Nenhum stream compatível encontrado para o próximo episódio.');
+                }
+            })();
+            return;
+        }
+
+        const bingeMatch = selecionarFontePorBingeGroup(
+            nextList.map((u) => ({
+                url: u,
+                label: rotulosRef.current[u],
+                bingeGroup: extrasMapRef.current[u]?.bingeGroup,
+            } satisfies MediaSource)),
+            bingeAtual,
+        );
+        const preferida = bingeAtual && bingeMatch
+            ? bingeMatch.index
+            : fontePreferida(params.seriesId, comVersao(nextList));
+        aplicarLista(nextList, preferida);
+    }, [resolvedNextEpisode, params.seriesId, params.nextSources, params.imdbId, params.addonRawId, routeParams.tmdb, activeSeasonNum, activeEpisodeNum, comVersao, setSeriesProgress, isOffline, items, router]);
     handleNextEpisodeRef.current = handleNextEpisode;
     const toggleAspectRatio = useCallback(() => {
         setResizeMode((prev) => {
@@ -1337,10 +1489,14 @@ export default function MediaPlayerScreen() {
         // Cabeçalho HTTP não faz sentido para um arquivo local, e mandar um
         // User-Agent junto de um `file://` é o tipo de coisa que varia de
         // versão para versão do ExoPlayer sem aviso nenhum.
-        const s: any = { uri: resolvedUrl, headers: isOffline ? {} : (STRATEGIES[strategyIdx]?.headers ?? {}) };
+        const addonHeaders = headersMapRef.current[activeUrl] ?? headersMapRef.current[resolvedUrl];
+        const headers = isOffline
+            ? {}
+            : mesclarHeadersReproducao(STRATEGIES[strategyIdx]?.headers, addonHeaders);
+        const s: any = { uri: resolvedUrl, headers };
         if (sourceType) s.type = sourceType;
         return s;
-    }, [resolvedUrl, strategyIdx, sourceType, isOffline, esperandoDestino]);
+    }, [resolvedUrl, activeUrl, strategyIdx, sourceType, isOffline, esperandoDestino]);
 
     const retryManual = useCallback(() => {
         strategyIdxRef.current = 0;
@@ -1364,6 +1520,8 @@ export default function MediaPlayerScreen() {
         }
         sourceIndexRef.current = index;
         setSelectedSource(index);
+        const binge = extrasMapRef.current[url]?.bingeGroup;
+        if (binge) activeBingeGroupRef.current = binge;
         setActiveUrl(url);
         setResolvedUrl(url);
         strategyIdxRef.current = 0;
@@ -1401,7 +1559,12 @@ export default function MediaPlayerScreen() {
                     rate={rate}
                     selectedAudioTrack={selectedAudio !== null ? { type: SelectedTrackType.INDEX, value: selectedAudio } : undefined}
                     textTracks={legendaExt && legendaUri
-                        ? [{ title: legendaExt.rotulo, language: legendaExt.iso as ISO639_1, type: TextTrackType.SUBRIP, uri: legendaUri }]
+                        ? [{
+                            title: legendaExt.rotulo,
+                            language: legendaExt.iso as ISO639_1,
+                            type: legendaUri.endsWith('.vtt') ? TextTrackType.VTT : TextTrackType.SUBRIP,
+                            uri: legendaUri,
+                        }]
                         : undefined}
                     selectedTextTrack={legendaExt && legendaUri
                         ? { type: SelectedTrackType.TITLE, value: legendaExt.rotulo }

@@ -1,9 +1,27 @@
 /** Adaptador do catálogo compartilhado por SaimoPlayer e SaimoTV-Android. */
-import type { MediaItem } from '../types';
+import type { AddonMeta, Episode, MediaItem, SeriesEpisodes } from '../types';
+import {
+  analisarIdItemAddon,
+  analisarIdItemTmdb,
+  addonMetaParaMediaItem,
+  buscarNosCatalogosAddons,
+  carregarAddons,
+  carregarCatalogosDosAddons,
+  consultarMetaAddon,
+  getAddonsAtivos,
+  parseAnoReleaseInfo,
+} from './addons';
+import { baseFilmes } from './enderecos';
 import {
   clearSaimoSourceCache, getVodItem, loadVodCategory, loadVodIndex,
   loadVodCollection, parseVodId, searchVod, carregarDetalhes, detalheDe,
 } from './saimoSources';
+import {
+  buscarNoTMDB,
+  carregarCatalogosDescobertaTMDB,
+  carregarItemTMDBCompleto,
+  resolverTmdbPorImdb,
+} from './tmdbService';
 
 export interface APICategories {
   movies: { id: string; label: string; count: number }[];
@@ -25,12 +43,14 @@ function categoryParts(categoryId: string): { type: 'movie' | 'series'; letter: 
 }
 
 async function allCategoryIds(): Promise<string[]> {
+  if (!(await baseFilmes())) return [];
   const index = await loadVodIndex();
   return ['animes', 'doramas', ...index.entries.flatMap(entry => [`filmes-${entry.letter}`, `series-${entry.letter}`])];
 }
 
 async function loadCategoryInternal(categoryId: string, force = false): Promise<MediaItem[]> {
   if (!force && CATEGORY_CACHE.has(categoryId)) return CATEGORY_CACHE.get(categoryId)!;
+  if (!(await baseFilmes())) return CATEGORY_CACHE.get(categoryId) ?? [];
   if (categoryId === 'animes' || categoryId === 'doramas') {
     const items = await loadVodCollection(categoryId, force);
     CATEGORY_CACHE.set(categoryId, items);
@@ -89,7 +109,178 @@ function ordenarPor<T extends number | string>(items: MediaItem[], chave: (i: Me
   return comChave.map((x) => x.item);
 }
 
+function addonVideosParaEpisodes(meta: AddonMeta, itemId: string): SeriesEpisodes {
+  const episodes: SeriesEpisodes = {};
+  if (!Array.isArray(meta.videos)) return episodes;
+  for (const v of meta.videos) {
+    const season = typeof v.season === 'number' && v.season > 0 ? v.season : 1;
+    const epNum = typeof v.episode === 'number' && v.episode > 0 ? v.episode : 0;
+    if (!epNum) continue;
+    const key = String(season);
+    if (!episodes[key]) episodes[key] = [];
+    const epObj: Episode = {
+      episode: epNum,
+      name: v.title || v.name || `Episódio ${epNum}`,
+      url: '',
+      id: `${itemId}|e|${season}:${epNum}`,
+      ...(v.thumbnail ? { logo: v.thumbnail } : {}),
+    };
+    episodes[key].push(epObj);
+  }
+  for (const key of Object.keys(episodes)) {
+    episodes[key].sort((a, b) => a.episode - b.episode);
+  }
+  return episodes;
+}
+
+async function resolverItemAddonOuTmdb(id: string): Promise<MediaItem | null> {
+  const cached = ITEM_CACHE.get(id);
+  if (cached) return cached;
+
+  const tmdbParsed = analisarIdItemTmdb(id);
+  if (tmdbParsed) {
+    const item = await carregarItemTMDBCompleto(tmdbParsed.tmdbId, tmdbParsed.type === 'tv');
+    if (item) {
+      ITEM_CACHE.set(id, item);
+      ITEM_CACHE.set(item.id, item);
+    }
+    return item;
+  }
+
+  const addonParsed = analisarIdItemAddon(id);
+  if (!addonParsed) return null;
+
+  const ehSerie = addonParsed.type === 'series';
+  const [metaResp, ponteTmdb] = await Promise.all([
+    consultarMetaAddon(addonParsed.type, [addonParsed.rawId], addonParsed.addonId).catch(() => null),
+    resolverTmdbPorImdb(addonParsed.rawId, ehSerie).catch(() => null),
+  ]);
+
+  let tmdbItem: MediaItem | null = null;
+  const tmdbId = ponteTmdb?.tmdbId
+    ?? (metaResp?.meta?.tmdb_id ? Number(metaResp.meta.tmdb_id) : 0);
+
+  if (tmdbId > 0) {
+    tmdbItem = await carregarItemTMDBCompleto(tmdbId, ehSerie).catch(() => null);
+  }
+
+  if (tmdbItem && metaResp?.meta) {
+    const addonEp = addonVideosParaEpisodes(metaResp.meta, id);
+    const episodes = tmdbItem.episodes && Object.keys(tmdbItem.episodes).length > 0
+      ? tmdbItem.episodes
+      : (Object.keys(addonEp).length > 0 ? addonEp : undefined);
+    const imdbFinal = metaResp.meta.imdb_id
+      || (/^tt\d+$/i.test(addonParsed.rawId) ? addonParsed.rawId : undefined)
+      || tmdbItem.imdbId;
+
+    const combinado: MediaItem = {
+      ...tmdbItem,
+      id,
+      ...(imdbFinal ? { imdbId: imdbFinal } : {}),
+      addonId: addonParsed.addonId,
+      addonRawId: addonParsed.rawId,
+      addonMeta: metaResp.meta,
+      ...(episodes ? { episodes } : {}),
+      tmdb: tmdbItem.tmdb ? { ...tmdbItem.tmdb, ...(imdbFinal ? { imdbId: imdbFinal } : {}) } : tmdbItem.tmdb,
+    };
+    ITEM_CACHE.set(id, combinado);
+    return combinado;
+  }
+
+  if (tmdbItem) {
+    const combinado: MediaItem = {
+      ...tmdbItem,
+      id,
+      addonId: addonParsed.addonId,
+      addonRawId: addonParsed.rawId,
+      ...(!tmdbItem.imdbId && /^tt\d+$/i.test(addonParsed.rawId) ? { imdbId: addonParsed.rawId } : {}),
+    };
+    ITEM_CACHE.set(id, combinado);
+    return combinado;
+  }
+
+  if (metaResp?.meta) {
+    const baseItem = addonMetaParaMediaItem(metaResp.meta, metaResp.addon, metaResp.addon.name);
+    const episodes = ehSerie ? addonVideosParaEpisodes(metaResp.meta, id) : undefined;
+    const itemFinal: MediaItem = {
+      ...baseItem,
+      id,
+      ...(episodes && Object.keys(episodes).length > 0 ? { episodes } : {}),
+    };
+    ITEM_CACHE.set(id, itemFinal);
+    return itemFinal;
+  }
+
+  return null;
+}
+
+async function montarCatalogoSemLista(params: Parameters<typeof getCatalog>[0]): Promise<MediaItem[]> {
+  await carregarAddons();
+  if (getAddonsAtivos().length === 0) return [];
+
+  const filtroTipo = params.p_type === 'series' ? 'tv' : params.p_type === 'movie' ? 'movie' : undefined;
+  let items: MediaItem[] = [];
+
+  if (params.p_search?.trim()) {
+    const [addonRes, tmdbRes] = await Promise.all([
+      buscarNosCatalogosAddons(params.p_search),
+      buscarNoTMDB(params.p_search),
+    ]);
+    const vistos = new Set<string>();
+    for (const i of [...addonRes, ...tmdbRes]) {
+      const k = `${i.type}:${i.imdbId || i.tmdb?.id || i.name.toLowerCase()}`;
+      if (vistos.has(k)) continue;
+      vistos.add(k);
+      items.push(i);
+    }
+  } else {
+    const [catsAddon, catsTmdb] = await Promise.all([
+      carregarCatalogosDosAddons(filtroTipo),
+      carregarCatalogosDescobertaTMDB(filtroTipo),
+    ]);
+    const vistos = new Set<string>();
+    for (const c of [...catsAddon, ...catsTmdb]) {
+      for (const i of c.items) {
+        if (vistos.has(i.id)) continue;
+        vistos.add(i.id);
+        items.push(i);
+      }
+    }
+  }
+
+  if (filtroTipo) {
+    items = items.filter((i) => i.type === filtroTipo);
+  }
+  if (params.p_genero) {
+    items = items.filter((i) => (i.tmdb?.genres || []).includes(params.p_genero!));
+  }
+  if (params.p_anos) {
+    items = items.filter((i) => {
+      const a = Number(i.tmdb?.year || parseAnoReleaseInfo(i.addonMeta?.releaseInfo)) || 0;
+      return a >= params.p_anos![0] && a <= params.p_anos![1];
+    });
+  }
+  if (params.p_nota) {
+    items = items.filter((i) => (i.tmdb?.rating ?? 0) >= params.p_nota!);
+  }
+
+  if (params.p_order_by === 'name') {
+    items = ordenarPor(items, (i) => i.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(), false);
+  } else if (params.p_order_by === 'new') {
+    items = ordenarPor(items, (i) => Number(i.tmdb?.year) || 0, true);
+  } else if (params.p_order_by === 'rating') {
+    items = ordenarPor(items, (i) => i.tmdb?.rating || 0, true);
+  } else if (params.p_order_by === 'popular') {
+    items = ordenarPor(items, (i) => i.tmdb?.popularity || 0, true);
+  }
+  return items;
+}
+
 async function montarCatalogo(params: Parameters<typeof getCatalog>[0]): Promise<MediaItem[]> {
+  if (!(await baseFilmes())) {
+    return montarCatalogoSemLista(params);
+  }
+
   const filtra = !!(params.p_genero || params.p_anos || params.p_idade !== undefined || params.p_nota);
   const precisaDetalhes = filtra || params.p_order_by === 'rating' || params.p_order_by === 'popular' || params.p_order_by === 'new';
   // Filtrando, ordenando ou navegando sem texto, o acervo inteiro entra (sem o
@@ -124,7 +315,18 @@ async function montarCatalogo(params: Parameters<typeof getCatalog>[0]): Promise
 export function invalidateItemCache(id: string): void { ITEM_CACHE.delete(id); }
 
 export async function getItemAPI(id: string): Promise<MediaItem> {
-  const rootId = id.includes('|e|') ? id.split('|e|')[0] : id;
+  let rootId = id.includes('|e|') ? id.split('|e|')[0] : id;
+  if (rootId.startsWith('tmdb|')) {
+    const p = rootId.split('|');
+    if (p.length >= 3) rootId = `tmdb|${p[1]}|${p[2]}`;
+  }
+
+  if (analisarIdItemAddon(rootId) || analisarIdItemTmdb(rootId)) {
+    const resolvido = await resolverItemAddonOuTmdb(rootId);
+    if (resolvido) return resolvido;
+    throw new Error(`Item de addon indisponível: ${id}`);
+  }
+
   const parsed = parseVodId(rootId);
   if (!parsed) throw new Error(`Item desconhecido: ${id}`);
   const cached = ITEM_CACHE.get(rootId);
@@ -136,6 +338,17 @@ export async function getItemAPI(id: string): Promise<MediaItem> {
 }
 
 export async function getCategories(): Promise<APICategories> {
+  if (!(await baseFilmes())) {
+    const movies: { id: string; label: string; count: number }[] = [];
+    const series: { id: string; label: string; count: number }[] = [];
+    for (const [id, items] of CATEGORY_CACHE.entries()) {
+      const label = items[0]?.categoryLabel || id;
+      const ehSerie = items.some((i) => i.type === 'tv');
+      if (ehSerie) series.push({ id, label, count: items.length });
+      else movies.push({ id, label, count: items.length });
+    }
+    return { movies, series };
+  }
   const index = await loadVodIndex();
   return {
     movies: index.entries.map(e => ({ id: `filmes-${e.letter}`, label: `Filmes • ${e.letter}`, count: e.movies })),
@@ -147,10 +360,32 @@ export async function getFilmography(_params: { p_actor_id?: number; p_actor?: s
   return { items: [], total: 0, page: 1, totalPages: 1 };
 }
 
-/** Carrega oito letras primeiro; as restantes entram em background. */
+/** Carrega oito letras primeiro; as restantes entram em background. Quando só há addons, carrega catálogos + descoberta TMDB. */
 export async function loadAllPreviews(limit = PREVIEW_SIZE): Promise<Map<string, MediaItem[]>> {
   if (CATEGORY_CACHE.size) return getAllLoadedCategories(limit);
   stopRequested = false;
+
+  if (!(await baseFilmes())) {
+    await carregarAddons();
+    if (getAddonsAtivos().length === 0) return new Map();
+
+    const [catsAddon, catsTmdb] = await Promise.all([
+      carregarCatalogosDosAddons().catch(() => []),
+      carregarCatalogosDescobertaTMDB().catch(() => []),
+    ]);
+
+    for (const cat of [...catsAddon, ...catsTmdb]) {
+      const rotuladas = cat.items.map((item) => ({
+        ...item,
+        categoryLabel: cat.name,
+        category: cat.name,
+      }));
+      CATEGORY_CACHE.set(cat.id, rotuladas);
+      for (const item of rotuladas) ITEM_CACHE.set(item.id, item);
+    }
+    return getAllLoadedCategories(limit);
+  }
+
   const ids = (await allCategoryIds()).slice(0, 16);
   await Promise.all(ids.map(async id => {
     try { await loadCategoryInternal(id); }

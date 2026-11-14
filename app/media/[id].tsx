@@ -24,6 +24,8 @@ import { downloadManager } from '../../services/downloadManager';
 import DownloadButton from '../../components/DownloadButton';
 import CastAction from '../../components/CastAction';
 import SourceSheet from '../../components/SourceSheet';
+import AddonStreamsModal, { type AddonStreamPicked } from '../../components/AddonStreamsModal';
+import { aoMudarAddons, carregarAddons, getAddonsAtivos } from '../../services/addons';
 import { primeiraFonteBaixavel } from '../../services/downloadUtils';
 import { parseVodId } from '../../services/saimoSources';
 import type { MediaItem, CastMember } from '../../types';
@@ -51,11 +53,19 @@ export default function MediaDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [overviewExpanded, setOverviewExpanded] = useState(false);
   const [sourceSheet, setSourceSheet] = useState(false);
+  const [addonsSheet, setAddonsSheet] = useState(false);
+  const [temAddons, setTemAddons] = useState(false);
 
   const { isFavorite, addFavorite, removeFavorite, addToHistory } = useMediaStore();
   const progress = useMediaStore(s => s.watchHistory.find(h => h.id === id));
   
   const [favorite, setFavorite] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setTemAddons(getAddonsAtivos().length > 0);
+    carregarAddons().then(sync);
+    return aoMudarAddons(sync);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -96,18 +106,86 @@ export default function MediaDetailScreen() {
     router.back();
   }, [router]);
 
-  const handlePlay = useCallback(() => {
+  const handlePlay = useCallback((urlOverride?: string) => {
     if (!media) return;
+    const urlPrincipal = urlOverride || media.url;
+    if (!urlPrincipal) {
+      if (temAddons) setAddonsSheet(true);
+      return;
+    }
     addToHistory(media.id);
+    const urls = [urlPrincipal, ...(media.sources ?? []).map(s => s.url).filter(u => u && u !== urlPrincipal)];
     router.push({
       pathname: '/media-player/[id]' as any,
       params: {
         id: media.id,
-        url: encodeURIComponent(media.url),
-        sources: encodeURIComponent(JSON.stringify((media.sources ?? []).map(source => source.url))),
+        url: encodeURIComponent(urlPrincipal),
+        sources: encodeURIComponent(JSON.stringify(urls)),
         title: media.tmdb?.title || media.name,
         tmdb: media.tmdb?.id ? String(media.tmdb.id) : '',
+        imdbId: media.imdbId || media.tmdb?.imdbId || '',
+        addonRawId: media.addonRawId || '',
       }
+    });
+  }, [media, temAddons, router, addToHistory]);
+
+  const handlePlayAddonPicked = useCallback((picked: AddonStreamPicked) => {
+    if (!media) return;
+    addToHistory(media.id);
+
+    const directStreams = picked.allStreams.filter((s) => !!s.url);
+    const otherUrls = directStreams.map((s) => s.url!).filter((u) => u && u !== picked.resolvedUrl);
+    const vodUrls = (media.sources ?? []).map((s) => s.url).filter((u) => u && u !== picked.resolvedUrl);
+    const allUrls = [picked.resolvedUrl, ...otherUrls, ...vodUrls];
+
+    const labelsMap: Record<string, string> = {};
+    const headersMap: Record<string, Record<string, string>> = {};
+    const extrasMap: Record<string, {
+      subtitles?: typeof picked.resolved.subtitles;
+      bingeGroup?: string;
+      filename?: string;
+      videoSize?: number;
+      videoHash?: string;
+    }> = {};
+
+    const registrar = (url: string, item: typeof picked.resolved) => {
+      labelsMap[url] = item.subtitle ? `${item.title} · ${item.subtitle}` : item.title;
+      if (item.headers) headersMap[url] = item.headers;
+      extrasMap[url] = {
+        ...(item.subtitles.length > 0 ? { subtitles: item.subtitles } : {}),
+        ...(item.bingeGroup ? { bingeGroup: item.bingeGroup } : {}),
+        ...(item.filename ? { filename: item.filename } : {}),
+        ...(typeof item.videoSize === 'number' ? { videoSize: item.videoSize } : {}),
+        ...(item.videoHash ? { videoHash: item.videoHash } : {}),
+      };
+    };
+
+    registrar(picked.resolvedUrl, picked.resolved);
+    for (const s of directStreams) {
+      if (s.url) registrar(s.url, s);
+    }
+
+    router.push({
+      pathname: '/media-player/[id]' as any,
+      params: {
+        id: media.id,
+        url: encodeURIComponent(picked.resolvedUrl),
+        sources: encodeURIComponent(JSON.stringify(allUrls)),
+        sourceLabels: encodeURIComponent(JSON.stringify(labelsMap)),
+        sourceHeaders: encodeURIComponent(JSON.stringify(headersMap)),
+        sourceExtras: encodeURIComponent(JSON.stringify(extrasMap)),
+        subtitles: picked.resolved.subtitles.length > 0
+          ? encodeURIComponent(JSON.stringify(picked.resolved.subtitles))
+          : '',
+        bingeGroup: picked.resolved.bingeGroup || '',
+        filename: picked.resolved.filename || '',
+        videoSize: picked.resolved.videoSize ? String(picked.resolved.videoSize) : '',
+        videoHash: picked.resolved.videoHash || '',
+        title: media.tmdb?.title || media.name,
+        tmdb: media.tmdb?.id ? String(media.tmdb.id) : '',
+        imdbId: picked.imdbId || media.imdbId || media.tmdb?.imdbId || '',
+        addonRawId: media.addonRawId || '',
+      },
     });
   }, [media, router, addToHistory]);
 
@@ -255,15 +333,20 @@ export default function MediaDetailScreen() {
         {/* Action Buttons */}
         <View style={styles.actions}>
           <TouchableOpacity 
-            style={[styles.playButton, !media.url && styles.playButtonDisabled]} 
-            onPress={handlePlay}
-            disabled={!media.url}
+            style={[styles.playButton, (!media.url && !temAddons) && styles.playButtonDisabled]} 
+            onPress={() => handlePlay()}
+            disabled={!media.url && !temAddons}
           >
             <View style={styles.playButtonContent}>
-                <Ionicons name={media.url ? "play" : "alert-circle"} size={24} color={media.url ? "#000" : Colors.textSecondary} />
-                <Text style={[styles.playText, !media.url && styles.playTextDisabled]}>
+                <Ionicons
+                  name={(media.url || temAddons) ? 'play' : 'alert-circle'}
+                  size={24}
+                  color={(media.url || temAddons) ? '#000' : Colors.textSecondary}
+                />
+                <Text style={[styles.playText, (!media.url && !temAddons) && styles.playTextDisabled]}>
                     {(() => {
-                        if (!media.url) return 'Indisponível';
+                        if (!media.url && !temAddons) return 'Indisponível';
+                        if (!media.url && temAddons) return 'Assistir (Addons)';
                         if (progress?.progress && progress?.duration) return 'Continuar';
                         return 'Assistir';
                     })()}
@@ -280,6 +363,16 @@ export default function MediaDetailScreen() {
                 return null;
             })()}
           </TouchableOpacity>
+
+          {temAddons && !!media.url && (
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => setAddonsSheet(true)}
+              accessibilityLabel="Escolher stream nos addons"
+            >
+              <Ionicons name="extension-puzzle-outline" size={24} color={Colors.primary} />
+            </TouchableOpacity>
+          )}
           
           <TouchableOpacity
             style={[styles.iconButton, favorite && styles.iconButtonActive]}
@@ -418,6 +511,19 @@ export default function MediaDetailScreen() {
             }
           });
         }}
+      />
+
+      <AddonStreamsModal
+        visible={addonsSheet}
+        title={media.tmdb?.title || media.name}
+        type="movie"
+        tmdbId={media.tmdb?.id}
+        imdbId={media.imdbId || media.tmdb?.imdbId}
+        addonRawId={media.addonRawId}
+        vodSources={media.sources}
+        onPickVod={(url) => handlePlay(url)}
+        onPickAddon={handlePlayAddonPicked}
+        onClose={() => setAddonsSheet(false)}
       />
     </View>
   );

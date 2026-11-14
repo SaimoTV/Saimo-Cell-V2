@@ -1,8 +1,8 @@
 import { ENDERECOS_SAIMO } from '../../constants/recursos';
 import Constants from 'expo-constants';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { 
   View, 
   Text,
@@ -28,6 +28,8 @@ import { useLinksStore } from '../../stores/linksStore';
 import PinModal from '../../components/PinModal';
 import MinhasListas from '../../components/MinhasListas';
 import ListasModal from '../../components/ListasModal';
+import AddonsModal from '../../components/AddonsModal';
+import { aoMudarAddons, carregarAddons, consumirPedidoAddons, getAddons, getAddonsAtivos } from '../../services/addons';
 import { verificarAtualizacaoAgora } from '../../services/atualizacao';
 
 export default function SettingsScreen() {
@@ -81,6 +83,29 @@ export default function SettingsScreen() {
   const linkCanais = useLinksStore(s => s.linkCanais);
   const linkFilmes = useLinksStore(s => s.linkFilmes);
   const [listasVisivel, setListasVisivel] = useState(false);
+  const [addonsVisivel, setAddonsVisivel] = useState(false);
+  const [addonsResumo, setAddonsResumo] = useState('Nenhum instalado');
+
+  const atualizarResumoAddons = useCallback(() => {
+    const todos = getAddons();
+    const ativos = getAddonsAtivos();
+    setAddonsResumo(
+      todos.length === 0
+        ? 'Nenhum instalado'
+        : `${todos.length} instalado(s) · ${ativos.length} ativo(s)`,
+    );
+  }, []);
+
+  useEffect(() => {
+    carregarAddons().then(atualizarResumoAddons);
+    return aoMudarAddons(atualizarResumoAddons);
+  }, [atualizarResumoAddons]);
+
+  useFocusEffect(useCallback(() => {
+    if (consumirPedidoAddons()) {
+      setAddonsVisivel(true);
+    }
+  }, []));
 
   const [pinAction, setPinAction] = useState<'change' | 'unlock'>('change');
 
@@ -237,6 +262,25 @@ export default function SettingsScreen() {
         )}
 
         <MinhasListas />
+
+        {/* Addons e Debrid */}
+        <Text style={styles.sectionTitle}>Addons e Debrid</Text>
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setAddonsVisivel(true)}
+            testID="ajustes-addons-debrid"
+          >
+            <View style={styles.settingInfo}>
+              <Ionicons name="extension-puzzle-outline" size={22} color={Colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.settingLabel}>Addons e Debrid</Text>
+                <Text style={styles.linkValor} numberOfLines={1}>{addonsResumo}</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
         {/* Interface */}
         <Text style={styles.sectionTitle}>Interface</Text>
@@ -410,6 +454,7 @@ export default function SettingsScreen() {
       </ScrollView>
 
       <ListasModal visible={listasVisivel} onClose={() => setListasVisivel(false)} />
+      <AddonsModal visible={addonsVisivel} onClose={() => setAddonsVisivel(false)} />
 
       <PinModal
         visible={pinModalVisible}

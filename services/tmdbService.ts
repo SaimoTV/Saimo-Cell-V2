@@ -6,12 +6,14 @@
 // que a busca por esse texto trouxesse primeiro. Aqui cada resultado ganha
 // uma pontuação — título exato, título contido, ano de lançamento,
 // popularidade — e só o suficiente para valer a pena costuma vencer.
-import type { TMDBData } from '../types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { Episode, MediaCategory, MediaItem, SeriesEpisodes, TMDBData } from '../types';
 
 const TMDB_API_KEY = '15d2ea6d0dc1d476efbca3eba2b9bbfb';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_MIN_SCORE = 10;
 const IMG_BASE = 'https://image.tmdb.org/t/p/';
+const CHAVE_BRIDGE = 'saimo_tmdb_imdb_v1';
 
 type TmdbTipo = 'movie' | 'tv';
 
@@ -280,6 +282,61 @@ function certificacaoBR(json: any, tipo: TmdbTipo): string | undefined {
 
 const detalhesCache = new Map<string, Promise<Partial<TMDBData>>>();
 
+const tmdbParaImdb = new Map<string, string>();
+const imdbParaTmdb = new Map<string, { tmdbId: number; series: boolean }>();
+let bridgeCarregada: Promise<void> | null = null;
+let bridgeDirtyTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function garantirBridgeCarregada(): Promise<void> {
+  if (!bridgeCarregada) {
+    bridgeCarregada = (async () => {
+      try {
+        const bruto = await AsyncStorage.getItem(CHAVE_BRIDGE);
+        if (!bruto) return;
+        const json = JSON.parse(bruto) as { t2i?: Record<string, string>; i2t?: Record<string, { tmdbId: number; series: boolean }> };
+        if (json?.t2i) {
+          for (const [k, v] of Object.entries(json.t2i)) {
+            if (typeof v === 'string' && /^tt\d+$/i.test(v)) tmdbParaImdb.set(k, v);
+          }
+        }
+        if (json?.i2t) {
+          for (const [k, v] of Object.entries(json.i2t)) {
+            if (v && typeof v.tmdbId === 'number') imdbParaTmdb.set(k, v);
+          }
+        }
+      } catch {
+        // segue com cache apenas em memória
+      }
+    })();
+  }
+  return bridgeCarregada;
+}
+
+function agendarSalvarBridge(): void {
+  if (bridgeDirtyTimer) return;
+  bridgeDirtyTimer = setTimeout(() => {
+    bridgeDirtyTimer = null;
+    const t2i: Record<string, string> = {};
+    const i2t: Record<string, { tmdbId: number; series: boolean }> = {};
+    // Limita em memória persistida aos 1500 vínculos mais recentes
+    const entradasT = Array.from(tmdbParaImdb.entries()).slice(-1500);
+    for (const [k, v] of entradasT) t2i[k] = v;
+    const entradasI = Array.from(imdbParaTmdb.entries()).slice(-1500);
+    for (const [k, v] of entradasI) i2t[k] = v;
+    void AsyncStorage.setItem(CHAVE_BRIDGE, JSON.stringify({ t2i, i2t })).catch(() => {});
+  }, 400);
+}
+
+export function registrarVinculoTmdbImdb(series: boolean, tmdbId: number, imdbId?: string | null): void {
+  if (!tmdbId || !imdbId || !/^tt\d+$/i.test(imdbId.trim())) return;
+  const imdbNorm = imdbId.trim();
+  const chave = `${series ? 'tv' : 'movie'}:${tmdbId}`;
+  const mudou = tmdbParaImdb.get(chave) !== imdbNorm || !imdbParaTmdb.has(imdbNorm);
+  tmdbParaImdb.set(chave, imdbNorm);
+  imdbParaTmdb.set(imdbNorm, { tmdbId, series });
+  if (mudou) agendarSalvarBridge();
+}
+
 /** A ficha completa de um título já identificado no TMDB. */
 export function getTMDBDetails(id: number, series: boolean): Promise<Partial<TMDBData>> {
   const tipo: TmdbTipo = series ? 'tv' : 'movie';
@@ -288,7 +345,7 @@ export function getTMDBDetails(id: number, series: boolean): Promise<Partial<TMD
   if (existente) return existente;
 
   const promessa = (async (): Promise<Partial<TMDBData>> => {
-    const extras = series ? 'credits,content_ratings' : 'credits,release_dates';
+    const extras = series ? 'credits,content_ratings,external_ids' : 'credits,release_dates,external_ids';
     const url = `${TMDB_BASE}/${tipo}/${id}?api_key=${TMDB_API_KEY}` +
       `&language=pt-BR&append_to_response=${extras}`;
     try {
@@ -298,6 +355,13 @@ export function getTMDBDetails(id: number, series: boolean): Promise<Partial<TMD
       clearTimeout(timer);
       if (!r.ok) return {};
       const json = await r.json();
+
+      const imdbId = typeof json?.external_ids?.imdb_id === 'string' && /^tt\d+$/i.test(json.external_ids.imdb_id.trim())
+        ? json.external_ids.imdb_id.trim()
+        : undefined;
+      if (imdbId) {
+        registrarVinculoTmdbImdb(series, id, imdbId);
+      }
 
       const equipe: TmdbPessoa[] = json?.credits?.crew ?? [];
       const elenco: TmdbPessoa[] = json?.credits?.cast ?? [];
@@ -325,6 +389,7 @@ export function getTMDBDetails(id: number, series: boolean): Promise<Partial<TMD
       // Campo vazio não entra: a ficha completa o que a busca trouxe, e
       // sobrescrever com nada seria apagar o que já estava na tela.
       const ficha: Partial<TMDBData> = {};
+      if (imdbId) ficha.imdbId = imdbId;
       if (json?.tagline) ficha.tagline = json.tagline;
       if (json?.overview) ficha.overview = json.overview;
       if (json?.status) ficha.status = json.status;
@@ -378,6 +443,394 @@ export async function creditosDe(ator: number): Promise<{ id: number; serie: boo
       saida.push({ id, serie });
     }
     return saida;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolve o ID IMDb (tt...) a partir de um TMDB ID usando cache persistente e endpoint external_ids.
+ */
+export async function resolverImdbPorTmdb(
+  tmdbId: number,
+  series: boolean,
+): Promise<string | undefined> {
+  if (!tmdbId || tmdbId <= 0) return undefined;
+  await garantirBridgeCarregada();
+  const chave = `${series ? 'tv' : 'movie'}:${tmdbId}`;
+  const cached = tmdbParaImdb.get(chave);
+  if (cached) return cached;
+
+  try {
+    const tipo: TmdbTipo = series ? 'tv' : 'movie';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const r = await fetch(
+      `${TMDB_BASE}/${tipo}/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`,
+      { signal: controller.signal },
+    );
+    clearTimeout(timer);
+    if (!r.ok) return undefined;
+    const json = await r.json();
+    const imdb = typeof json?.imdb_id === 'string' ? json.imdb_id.trim() : '';
+    if (/^tt\d+$/i.test(imdb)) {
+      registrarVinculoTmdbImdb(series, tmdbId, imdb);
+      return imdb;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve o ID TMDB (e ficha básica) a partir de um ID IMDb (tt...) ou prefixo `tmdb:`.
+ */
+export async function resolverTmdbPorImdb(
+  rawId: string,
+  preferSeries?: boolean,
+): Promise<{ tmdbId: number; series: boolean; imdbId?: string } | null> {
+  const limpo = rawId.trim();
+  if (!limpo) return null;
+
+  const tmdbMatch = /^tmdb:(\d+)/i.exec(limpo);
+  if (tmdbMatch) {
+    return { tmdbId: Number(tmdbMatch[1]), series: Boolean(preferSeries) };
+  }
+
+  const ttMatch = /^(tt\d+)/i.exec(limpo);
+  if (!ttMatch) return null;
+  const imdbId = ttMatch[1];
+
+  await garantirBridgeCarregada();
+  const cached = imdbParaTmdb.get(imdbId);
+  if (cached) {
+    return { tmdbId: cached.tmdbId, series: cached.series, imdbId };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const r = await fetch(
+      `${TMDB_BASE}/find/${encodeURIComponent(imdbId)}?api_key=${TMDB_API_KEY}&external_source=imdb_id&language=pt-BR`,
+      { signal: controller.signal },
+    );
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    const json = await r.json();
+
+    const movieHit = Array.isArray(json?.movie_results) ? json.movie_results[0] : undefined;
+    const tvHit = Array.isArray(json?.tv_results) ? json.tv_results[0] : undefined;
+
+    const escolhido = preferSeries === true
+      ? (tvHit ? { hit: tvHit, series: true } : movieHit ? { hit: movieHit, series: false } : null)
+      : preferSeries === false
+        ? (movieHit ? { hit: movieHit, series: false } : tvHit ? { hit: tvHit, series: true } : null)
+        : (movieHit ? { hit: movieHit, series: false } : tvHit ? { hit: tvHit, series: true } : null);
+
+    if (!escolhido?.hit?.id) return null;
+    const tmdbId = Number(escolhido.hit.id);
+    registrarVinculoTmdbImdb(escolhido.series, tmdbId, imdbId);
+    return { tmdbId, series: escolhido.series, imdbId };
+  } catch {
+    return null;
+  }
+}
+
+function tmdbResultadoParaMediaItem(
+  r: Record<string, unknown>,
+  tipo: 'movie' | 'tv',
+  categoria: string,
+): MediaItem {
+  const idNum = Number(r.id);
+  const title = String(tipo === 'tv' ? (r.name || r.original_name || '') : (r.title || r.original_title || ''));
+  const rawDate = String(tipo === 'tv' ? (r.first_air_date || '') : (r.release_date || ''));
+  const year = rawDate.length >= 4 ? rawDate.slice(0, 4) : '';
+  const genreIds = Array.isArray(r.genre_ids) ? (r.genre_ids as number[]) : [];
+  const genres = genreIds.map((g) => GENRE_NAMES[g]).filter(Boolean);
+  const poster = typeof r.poster_path === 'string' && r.poster_path ? `${IMG_BASE}w500${r.poster_path}` : '';
+  const posterHD = typeof r.poster_path === 'string' && r.poster_path ? `${IMG_BASE}w780${r.poster_path}` : undefined;
+  const backdrop = typeof r.backdrop_path === 'string' && r.backdrop_path ? `${IMG_BASE}w780${r.backdrop_path}` : undefined;
+  const backdropHD = typeof r.backdrop_path === 'string' && r.backdrop_path ? `${IMG_BASE}original${r.backdrop_path}` : undefined;
+
+  return {
+    id: `tmdb|${tipo}|${idNum}`,
+    name: title,
+    url: '',
+    category: categoria,
+    categoryLabel: categoria,
+    type: tipo,
+    isAdult: false,
+    logo: poster || undefined,
+    tmdb: {
+      id: idNum,
+      title,
+      originalTitle: String(tipo === 'tv' ? (r.original_name || title) : (r.original_title || title)),
+      overview: typeof r.overview === 'string' ? r.overview : '',
+      releaseDate: rawDate,
+      year,
+      rating: Number(r.vote_average || 0),
+      voteCount: Number(r.vote_count || 0),
+      popularity: Number(r.popularity || 0),
+      genres,
+      poster,
+      posterHD,
+      backdrop,
+      backdropHD,
+      cast: [],
+    },
+  };
+}
+
+/**
+ * Carrega ficha completa de filme ou série do TMDB (incluindo temporadas e episódios da temporada 1).
+ */
+export async function carregarItemTMDBCompleto(
+  tmdbId: number,
+  series: boolean,
+): Promise<MediaItem | null> {
+  const tipo: TmdbTipo = series ? 'tv' : 'movie';
+  const extras = series ? 'credits,content_ratings,external_ids' : 'credits,release_dates,external_ids';
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 9000);
+    const r = await fetch(
+      `${TMDB_BASE}/${tipo}/${tmdbId}?api_key=${TMDB_API_KEY}&language=pt-BR&append_to_response=${extras}`,
+      { signal: controller.signal },
+    );
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    const json = await r.json();
+
+    const imdbId = typeof json?.external_ids?.imdb_id === 'string' && /^tt\d+$/i.test(json.external_ids.imdb_id.trim())
+      ? json.external_ids.imdb_id.trim()
+      : undefined;
+    if (imdbId) {
+      registrarVinculoTmdbImdb(series, tmdbId, imdbId);
+    }
+
+    const title = String(series ? (json.name || json.original_name || '') : (json.title || json.original_title || ''));
+    const rawDate = String(series ? (json.first_air_date || '') : (json.release_date || ''));
+    const year = rawDate.length >= 4 ? rawDate.slice(0, 4) : '';
+    const generos: string[] = (json?.genres ?? []).map((g: any) => g.name).filter(Boolean);
+    const poster = json?.poster_path ? `${IMG_BASE}w500${json.poster_path}` : '';
+    const posterHD = json?.poster_path ? `${IMG_BASE}w780${json.poster_path}` : undefined;
+    const backdrop = json?.backdrop_path ? `${IMG_BASE}w780${json.backdrop_path}` : undefined;
+    const backdropHD = json?.backdrop_path ? `${IMG_BASE}original${json.backdrop_path}` : undefined;
+
+    const equipe: TmdbPessoa[] = json?.credits?.crew ?? [];
+    const elenco: TmdbPessoa[] = json?.credits?.cast ?? [];
+    const criadores: TmdbPessoa[] = json?.created_by ?? [];
+    const direcao = equipe.filter((p) => p.job === 'Director').map((p) => p.name);
+    const roteiro = equipe
+      .filter((p) => p.job === 'Screenplay' || p.job === 'Writer' || p.job === 'Story')
+      .map((p) => p.name);
+    const assinatura = direcao.length ? direcao : criadores.map((p) => p.name);
+
+    let episodes: SeriesEpisodes | undefined;
+    let totalSeasons: number | undefined;
+    let totalEpisodes: number | undefined;
+
+    if (series) {
+      const seasons: Array<{ season_number: number; episode_count?: number }> = Array.isArray(json?.seasons)
+        ? json.seasons.filter((s: any) => Number(s?.season_number) > 0)
+        : [];
+      totalSeasons = json?.number_of_seasons ?? (seasons.length || undefined);
+      totalEpisodes = json?.number_of_episodes ?? undefined;
+      episodes = {};
+      // Carrega até as 6 primeiras temporadas em paralelo para UX instantânea na tela da série
+      const carregarTemps = seasons.slice(0, 6);
+      const epsPorTemp = await Promise.all(
+        carregarTemps.map(async (s) => ({
+          num: s.season_number,
+          lista: await carregarEpisodiosTemporadaTmdb(tmdbId, s.season_number),
+        })),
+      );
+      for (const { num, lista } of epsPorTemp) {
+        if (lista.length > 0) {
+          episodes[String(num)] = lista;
+        }
+      }
+      // Preenche placeholders das temporadas restantes se existirem muitas
+      for (const s of seasons.slice(6)) {
+        const qtd = Number(s.episode_count || 0);
+        if (qtd > 0) {
+          episodes[String(s.season_number)] = Array.from({ length: qtd }, (_, i) => ({
+            episode: i + 1,
+            name: `Episódio ${i + 1}`,
+            url: '',
+            id: `tmdb|tv|${tmdbId}|${s.season_number}|${i + 1}`,
+          }));
+        }
+      }
+    }
+
+    return {
+      id: `tmdb|${tipo}|${tmdbId}`,
+      name: title || `TMDB ${tmdbId}`,
+      url: '',
+      category: generos[0] || (series ? 'Séries' : 'Filmes'),
+      categoryLabel: generos[0] || (series ? 'Séries' : 'Filmes'),
+      type: tipo,
+      isAdult: false,
+      logo: poster || undefined,
+      ...(imdbId ? { imdbId } : {}),
+      ...(totalSeasons ? { totalSeasons } : {}),
+      ...(totalEpisodes ? { totalEpisodes } : {}),
+      ...(episodes ? { episodes } : {}),
+      tmdb: {
+        id: tmdbId,
+        ...(imdbId ? { imdbId } : {}),
+        title: title || `TMDB ${tmdbId}`,
+        originalTitle: String(series ? (json.original_name || title) : (json.original_title || title)),
+        tagline: json?.tagline || undefined,
+        overview: json?.overview || '',
+        status: json?.status || undefined,
+        releaseDate: rawDate,
+        year,
+        runtime: series ? (json?.episode_run_time?.[0] as number | undefined) : (json?.runtime as number | undefined),
+        rating: Number(json?.vote_average || 0),
+        voteCount: Number(json?.vote_count || 0),
+        popularity: Number(json?.popularity || 0),
+        certification: certificacaoBR(json, tipo),
+        genres: generos,
+        poster,
+        posterHD,
+        backdrop,
+        backdropHD,
+        director: assinatura.slice(0, 2).join(', ') || undefined,
+        writer: [...new Set(roteiro)].slice(0, 2).join(', ') || undefined,
+        productionCompany: json?.production_companies?.[0]?.name || undefined,
+        cast: elenco.slice(0, 20).map((p) => ({
+          id: p.id,
+          name: p.name,
+          character: p.character || '',
+          photo: p.profile_path ? `${IMG_BASE}w185${p.profile_path}` : null,
+        })),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function carregarEpisodiosTemporadaTmdb(
+  tmdbId: number,
+  seasonNumber: number,
+): Promise<Episode[]> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const r = await fetch(
+      `${TMDB_BASE}/tv/${tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}&language=pt-BR`,
+      { signal: controller.signal },
+    );
+    clearTimeout(timer);
+    if (!r.ok) return [];
+    const json = await r.json();
+    const eps: any[] = Array.isArray(json?.episodes) ? json.episodes : [];
+    return eps.map((ep) => ({
+      episode: Number(ep.episode_number || 0),
+      name: String(ep.name || `Episódio ${ep.episode_number || ''}`),
+      url: '',
+      id: `tmdb|tv|${tmdbId}|${seasonNumber}|${ep.episode_number}`,
+      ...(ep.still_path ? { logo: `${IMG_BASE}w500${ep.still_path}` } : {}),
+    })).filter((e) => e.episode > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Descoberta via TMDB quando não há lista VOD configurada, mas há addons ativos.
+ */
+export async function carregarCatalogosDescobertaTMDB(
+  filtro?: 'movie' | 'tv',
+): Promise<MediaCategory[]> {
+  const baseEndpoints: Array<{ id: string; name: string; tipo: 'movie' | 'tv'; url: string }> = [
+    {
+      id: 'tmdb:trending_movie',
+      name: 'Filmes em Alta',
+      tipo: 'movie',
+      url: `${TMDB_BASE}/trending/movie/week?api_key=${TMDB_API_KEY}&language=pt-BR`,
+    },
+    {
+      id: 'tmdb:trending_tv',
+      name: 'Séries em Alta',
+      tipo: 'tv',
+      url: `${TMDB_BASE}/trending/tv/week?api_key=${TMDB_API_KEY}&language=pt-BR`,
+    },
+    {
+      id: 'tmdb:popular_movie',
+      name: 'Filmes Populares',
+      tipo: 'movie',
+      url: `${TMDB_BASE}/movie/popular?api_key=${TMDB_API_KEY}&language=pt-BR&region=BR`,
+    },
+    {
+      id: 'tmdb:popular_tv',
+      name: 'Séries Populares',
+      tipo: 'tv',
+      url: `${TMDB_BASE}/tv/popular?api_key=${TMDB_API_KEY}&language=pt-BR`,
+    },
+  ];
+  const endpoints = baseEndpoints.filter((ep) => !filtro || ep.tipo === filtro);
+
+  const resultados = await Promise.allSettled(
+    endpoints.map(async (ep): Promise<MediaCategory | null> => {
+      const r = await fetch(ep.url);
+      if (!r.ok) return null;
+      const json = await r.json();
+      const lista = Array.isArray(json?.results) ? json.results : [];
+      const items = lista
+        .filter((x: any) => x?.id && (x?.title || x?.name))
+        .slice(0, 20)
+        .map((x: Record<string, unknown>) => tmdbResultadoParaMediaItem(x, ep.tipo, ep.name));
+      if (items.length === 0) return null;
+      return {
+        id: ep.id,
+        name: ep.name,
+        items,
+        lastUpdated: Date.now(),
+      };
+    }),
+  );
+
+  const saida: MediaCategory[] = [];
+  for (const r of resultados) {
+    if (r.status === 'fulfilled' && r.value !== null) {
+      saida.push(r.value);
+    }
+  }
+  return saida;
+}
+
+/**
+ * Busca títulos no TMDB quando o usuário pesquisa sem lista VOD (com addons ativos).
+ */
+export async function buscarNoTMDB(query: string): Promise<MediaItem[]> {
+  const termo = query.trim();
+  if (!termo) return [];
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const r = await fetch(
+      `${TMDB_BASE}/search/multi?api_key=${TMDB_API_KEY}&language=pt-BR&include_adult=false&query=${encodeURIComponent(termo)}`,
+      { signal: controller.signal },
+    );
+    clearTimeout(timer);
+    if (!r.ok) return [];
+    const json = await r.json();
+    const lista: any[] = Array.isArray(json?.results) ? json.results : [];
+    return lista
+      .filter((x) => (x?.media_type === 'movie' || x?.media_type === 'tv') && x?.id)
+      .slice(0, 30)
+      .map((x) =>
+        tmdbResultadoParaMediaItem(
+          x,
+          x.media_type === 'tv' ? 'tv' : 'movie',
+          x.media_type === 'tv' ? 'Séries' : 'Filmes',
+        ),
+      );
   } catch {
     return [];
   }
