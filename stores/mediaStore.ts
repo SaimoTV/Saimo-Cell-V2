@@ -26,6 +26,7 @@ interface MediaState {
     seriesProgress: (SeriesProgress & { progress?: number; duration?: number })[];
     setSeriesProgress: (seriesId: string, season: number, episode: number, episodeId: string, progress?: number, duration?: number) => void;
     getSeriesProgress: (seriesId: string) => (SeriesProgress & { progress?: number; duration?: number }) | undefined;
+    removeFromContinue: (id: string) => void;
 
     // Filtros ativos
     activeFilter: MediaFilterType;
@@ -140,6 +141,14 @@ export const useMediaStore = create<MediaState>()(
             getSeriesProgress: (serieBruta: string) => {
                 const seriesId = semCodificacao(serieBruta);
                 return get().seriesProgress.find(p => p.seriesId === seriesId);
+            },
+
+            removeFromContinue: (id: string) => {
+                const limpo = semCodificacao(id);
+                set(state => ({
+                    watchHistory: state.watchHistory.filter(h => h.id !== id && semCodificacao(h.id) !== limpo),
+                    seriesProgress: state.seriesProgress.filter(p => p.seriesId !== limpo && p.seriesId !== id),
+                }));
             },
 
             // Filtros

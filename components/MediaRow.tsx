@@ -19,13 +19,14 @@ interface MediaRowProps {
   categoryId?: string;
   items: MediaItem[];
   onSeeAll?: () => void;
+  onRemove?: (item: MediaItem) => void;
 }
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.35; // Size medium
 const CARD_HEIGHT = CARD_WIDTH * 1.5;
 
-const MediaRow = memo(({ title, categoryId, items, onSeeAll }: MediaRowProps) => {
+const MediaRow = memo(({ title, categoryId, items, onSeeAll, onRemove }: MediaRowProps) => {
   const router = useRouter();
 
   if (items.length === 0) return null;
@@ -60,7 +61,19 @@ const MediaRow = memo(({ title, categoryId, items, onSeeAll }: MediaRowProps) =>
         data={items}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <MediaCard item={item} size="medium" />
+          <View style={styles.cardWrap}>
+            <MediaCard item={item} size="medium" />
+            {onRemove && (
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={() => onRemove(item)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel={`Remover ${item.name} de Continue assistindo`}
+              >
+                <Ionicons name="close" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
         )}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: Spacing.lg }}
@@ -71,7 +84,7 @@ const MediaRow = memo(({ title, categoryId, items, onSeeAll }: MediaRowProps) =>
 }, (prev, next) => {
   // Pela lista em si, não pelo tamanho: uma fileira trocada por outra do
   // mesmo tamanho (gêneros recarregados, "Continuar" atualizado) não mudava.
-  return prev.categoryId === next.categoryId && prev.items === next.items;
+  return prev.categoryId === next.categoryId && prev.items === next.items && prev.onRemove === next.onRemove;
 });
 
 MediaRow.displayName = 'MediaRow';
@@ -104,6 +117,23 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingHorizontal: Spacing.lg,
+  },
+  cardWrap: {
+    position: 'relative',
+  },
+  removeBtn: {
+    position: 'absolute',
+    top: 6,
+    right: Spacing.md + 6,
+    zIndex: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(10, 12, 22, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

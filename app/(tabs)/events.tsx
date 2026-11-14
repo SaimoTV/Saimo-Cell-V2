@@ -70,24 +70,23 @@ const CartaoJogo = React.memo(function CartaoJogo({ jogo, agora }: { jogo: Jogo;
   const isSaimoConnected = useConnectStore((s) => s.status === 'connected' && !!s.connectedTv);
   const connectedTv = useConnectStore((s) => s.connectedTv);
 
-  const canal = jogo.canal;
   const abrirNoCelular = () => {
-    if (!canal) return;
-    router.push({ pathname: '/player/[id]', params: { id: canal.id } });
+    if (!jogo.canal) return;
+    router.push({ pathname: '/player/[id]', params: { id: jogo.canal.id } });
   };
 
   const abrirNaTv = () => {
-    if (!canal) return;
-    saimoConnect.tuneChannel(canal.name);
-    Alert.alert('Saimo Connect', `Sintonizando ${canal.name} em ${connectedTv?.name || 'sua TV'}!`);
+    if (!jogo.canal) return;
+    saimoConnect.tuneChannel(jogo.canal.name);
+    Alert.alert('Saimo Connect', `Sintonizando ${jogo.canal.name} em ${connectedTv?.name || 'sua TV'}!`);
   };
 
   const abrir = () => {
-    if (!canal) return;
+    if (!jogo.canal) return;
     if (isSaimoConnected) {
       Alert.alert(
         'Assistir Evento',
-        `Onde deseja assistir a este jogo?\n\n${jogo.casa} x ${jogo.fora}\nCanal: ${canal?.name}`,
+        `Onde deseja assistir a este jogo?\n\n${jogo.casa} x ${jogo.fora}\nCanal: ${jogo.canal.name}`,
         [
           {
             text: `Na TV Box (${connectedTv?.name || 'TV'})`,
@@ -112,9 +111,8 @@ const CartaoJogo = React.memo(function CartaoJogo({ jogo, agora }: { jogo: Jogo;
     <TouchableOpacity
       style={[styles.card, vivo && styles.cardVivo]}
       onPress={abrir}
-      disabled={!canal}
-      activeOpacity={canal ? 0.8 : 1}
-      accessibilityLabel={`${jogo.casa} x ${jogo.fora}, ${canal ? `no canal ${canal.name}` : 'sem canal'}`}
+      activeOpacity={jogo.canal ? 0.8 : 1}
+      accessibilityLabel={jogo.canal ? `${jogo.casa} x ${jogo.fora}, no canal ${jogo.canal.name}` : `${jogo.casa} x ${jogo.fora}`}
     >
       <View style={styles.cardHeader}>
         <View style={styles.leagueInfo}>
@@ -157,16 +155,18 @@ const CartaoJogo = React.memo(function CartaoJogo({ jogo, agora }: { jogo: Jogo;
       </View>
 
       <View style={styles.channelRow}>
-        {canal?.logo ? (
-          <Image source={{ uri: canal.logo }} style={styles.channelLogo} contentFit="contain" />
+        {jogo.canal?.logo ? (
+          <Image source={{ uri: jogo.canal.logo }} style={styles.channelLogo} contentFit="contain" />
         ) : (
           <Ionicons name="tv-outline" size={18} color={Colors.textSecondary} />
         )}
-        <Text style={styles.channelName} numberOfLines={1}>{canal ? canal.name : 'Sem canal'}</Text>
-        {canal && <View style={styles.playPill}>
-          <Ionicons name="play" size={14} color="#FFFFFF" />
-          <Text style={styles.playText}>Assistir</Text>
-        </View>}
+        <Text style={styles.channelName} numberOfLines={1}>{jogo.canal?.name ?? 'Sem canal na lista'}</Text>
+        {jogo.canal && (
+          <View style={styles.playPill}>
+            <Ionicons name="play" size={14} color="#FFFFFF" />
+            <Text style={styles.playText}>Assistir</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );

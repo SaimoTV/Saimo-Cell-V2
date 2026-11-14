@@ -19,7 +19,6 @@ export interface Jogo {
     ligaLogo: string;
     inicio: number;
     fim: number;
-    /** Sem canal na lista: o jogo aparece como "Sem canal" e não abre player. */
     canal?: Channel;
     /** "pre", "in" ou "post", quando a ESPN conhece o jogo. */
     estado: string;

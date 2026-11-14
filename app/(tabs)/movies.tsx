@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  InteractionManager,
   ImageBackground,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -109,11 +110,6 @@ function TrailerBanner({ item, onOpen }: { item?: MediaItem; onOpen: () => void 
   );
 }
 
-/** O RN 0.88 removeu o InteractionManager: espera o próximo quadro e adia a tarefa. */
-function depoisDaInteracao(tarefa: () => void) {
-  requestAnimationFrame(() => setTimeout(tarefa, 0));
-}
-
 export default function MoviesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -210,7 +206,7 @@ export default function MoviesScreen() {
       setTotalLoaded(getTotalLoadedCount());
       catalogLoadedRef.current = true;
       setLoading(false);
-      depoisDaInteracao(() => {
+      InteractionManager.runAfterInteractions(() => {
         if (!mountedRef.current) return;
         setBgLoading(true);
         startBackgroundLoading(() => {
@@ -258,7 +254,7 @@ export default function MoviesScreen() {
     if (linkFilmes && !loading && !trendingLoadedRef.current) {
       trendingLoadedRef.current = true;
       setTrendingLoading(true);
-      depoisDaInteracao(() => {
+      InteractionManager.runAfterInteractions(() => {
         if (mountedRef.current) loadTrending();
       });
     }
@@ -417,6 +413,7 @@ export default function MoviesScreen() {
    */
   const watchHistory = useMediaStore(s => s.watchHistory);
   const seriesProgress = useMediaStore(s => s.seriesProgress);
+  const removeFromContinue = useMediaStore(s => s.removeFromContinue);
   const continuar = useMemo(() => {
     const porId = new Map(allItems.map(i => [i.id, i]));
     const entradas: { item: MediaItem; quando: number }[] = [];
@@ -448,7 +445,7 @@ export default function MoviesScreen() {
     return (
       <View>
         <TrailerBanner item={bannerItem} onOpen={openBannerItem} />
-        {continuar.length > 0 && <MediaRow title="Continue assistindo" items={continuar} />}
+        {continuar.length > 0 && <MediaRow title="Continue assistindo" items={continuar} onRemove={(item) => removeFromContinue(item.id)} />}
         {destaques.map(row => (
           <MediaRow key={row.title} title={row.title} items={row.items} />
         ))}
@@ -491,7 +488,7 @@ export default function MoviesScreen() {
   if (semEndereco) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
         <View style={styles.header}>
           <Text style={styles.title}>Filmes & Séries</Text>
         </View>
@@ -517,7 +514,7 @@ export default function MoviesScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
         <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.loadingText}>Carregando catálogo...</Text>
       </View>
@@ -526,7 +523,7 @@ export default function MoviesScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
 
       <View style={styles.header}>
         <View style={styles.headerTop}>
