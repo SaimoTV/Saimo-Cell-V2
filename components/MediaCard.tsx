@@ -22,6 +22,8 @@ interface MediaCardProps {
   item: MediaItem & { episodes?: any };
   size?: 'small' | 'medium' | 'large';
   cardWidth?: number;
+  hideRating?: boolean;
+  onRemove?: (item: MediaItem) => void;
 }
 
 const { width } = Dimensions.get('window');
@@ -55,7 +57,7 @@ const getRatingColor = (rating?: number) => {
   return '#EF4444'; // Vermelho
 };
 
-const MediaCard = memo(({ item, size = 'medium', cardWidth }: MediaCardProps) => {
+const MediaCard = memo(({ item, size = 'medium', cardWidth, hideRating, onRemove }: MediaCardProps) => {
   const router = useRouter();
   const client = useRemoteMediaClient();
   // Seletores e não a store inteira: assinada inteira, cada gravação de
@@ -217,7 +219,7 @@ const MediaCard = memo(({ item, size = 'medium', cardWidth }: MediaCardProps) =>
       <View style={styles.gradient} pointerEvents="none" />
       
       {/* Rating Badge */}
-      {tmdb && (tmdb.rating ?? 0) > 0 && (
+      {!hideRating && tmdb && (tmdb.rating ?? 0) > 0 && (
         <View style={[styles.ratingBadge, { backgroundColor: getRatingColor(tmdb.rating) }]}>
           <Ionicons name="star" size={10} color="#000" />
           <Text style={styles.ratingText}>{tmdb.rating!.toFixed(1)}</Text>
@@ -318,6 +320,19 @@ const MediaCard = memo(({ item, size = 'medium', cardWidth }: MediaCardProps) =>
               </Text>
             </TouchableOpacity>
 
+            {onRemove && (
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => {
+                  setShowOptions(false);
+                  onRemove(item);
+                }}
+              >
+                <Ionicons name="close-circle-outline" size={24} color="#FF4757" />
+                <Text style={styles.actionItemText}>Remover de Continue assistindo</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[styles.actionItem, styles.cancelItem]}
               onPress={() => setShowOptions(false)}
@@ -332,7 +347,9 @@ const MediaCard = memo(({ item, size = 'medium', cardWidth }: MediaCardProps) =>
 }, (prev: MediaCardProps, next: MediaCardProps) =>
   prev.item.id === next.item.id &&
   prev.item.tmdb?.rating === next.item.tmdb?.rating &&
-  prev.item.tmdb?.poster === next.item.tmdb?.poster
+  prev.item.tmdb?.poster === next.item.tmdb?.poster &&
+  Boolean(prev.hideRating) === Boolean(next.hideRating) &&
+  prev.onRemove === next.onRemove
 );
 
 MediaCard.displayName = 'MediaCard';
