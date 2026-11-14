@@ -71,15 +71,18 @@ const CartaoJogo = React.memo(function CartaoJogo({ jogo, agora }: { jogo: Jogo;
   const connectedTv = useConnectStore((s) => s.connectedTv);
 
   const abrirNoCelular = () => {
+    if (!jogo.canal) return;
     router.push({ pathname: '/player/[id]', params: { id: jogo.canal.id } });
   };
 
   const abrirNaTv = () => {
+    if (!jogo.canal) return;
     saimoConnect.tuneChannel(jogo.canal.name);
     Alert.alert('Saimo Connect', `Sintonizando ${jogo.canal.name} em ${connectedTv?.name || 'sua TV'}!`);
   };
 
   const abrir = () => {
+    if (!jogo.canal) return;
     if (isSaimoConnected) {
       Alert.alert(
         'Assistir Evento',
@@ -108,8 +111,8 @@ const CartaoJogo = React.memo(function CartaoJogo({ jogo, agora }: { jogo: Jogo;
     <TouchableOpacity
       style={[styles.card, vivo && styles.cardVivo]}
       onPress={abrir}
-      activeOpacity={0.8}
-      accessibilityLabel={`${jogo.casa} x ${jogo.fora}, no canal ${jogo.canal.name}`}
+      activeOpacity={jogo.canal ? 0.8 : 1}
+      accessibilityLabel={jogo.canal ? `${jogo.casa} x ${jogo.fora}, no canal ${jogo.canal.name}` : `${jogo.casa} x ${jogo.fora}`}
     >
       <View style={styles.cardHeader}>
         <View style={styles.leagueInfo}>
@@ -152,16 +155,18 @@ const CartaoJogo = React.memo(function CartaoJogo({ jogo, agora }: { jogo: Jogo;
       </View>
 
       <View style={styles.channelRow}>
-        {jogo.canal.logo ? (
+        {jogo.canal?.logo ? (
           <Image source={{ uri: jogo.canal.logo }} style={styles.channelLogo} contentFit="contain" />
         ) : (
           <Ionicons name="tv-outline" size={18} color={Colors.textSecondary} />
         )}
-        <Text style={styles.channelName} numberOfLines={1}>{jogo.canal.name}</Text>
-        <View style={styles.playPill}>
-          <Ionicons name="play" size={14} color="#FFFFFF" />
-          <Text style={styles.playText}>Assistir</Text>
-        </View>
+        <Text style={styles.channelName} numberOfLines={1}>{jogo.canal?.name ?? 'Sem canal na lista'}</Text>
+        {jogo.canal && (
+          <View style={styles.playPill}>
+            <Ionicons name="play" size={14} color="#FFFFFF" />
+            <Text style={styles.playText}>Assistir</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );

@@ -413,6 +413,7 @@ export default function MoviesScreen() {
    */
   const watchHistory = useMediaStore(s => s.watchHistory);
   const seriesProgress = useMediaStore(s => s.seriesProgress);
+  const removeFromContinue = useMediaStore(s => s.removeFromContinue);
   const continuar = useMemo(() => {
     const porId = new Map(allItems.map(i => [i.id, i]));
     const entradas: { item: MediaItem; quando: number }[] = [];
@@ -444,7 +445,7 @@ export default function MoviesScreen() {
     return (
       <View>
         <TrailerBanner item={bannerItem} onOpen={openBannerItem} />
-        {continuar.length > 0 && <MediaRow title="Continue assistindo" items={continuar} />}
+        {continuar.length > 0 && <MediaRow title="Continue assistindo" items={continuar} onRemove={(item) => removeFromContinue(item.id)} />}
         {destaques.map(row => (
           <MediaRow key={row.title} title={row.title} items={row.items} />
         ))}

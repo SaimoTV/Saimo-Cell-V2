@@ -19,7 +19,7 @@ export interface Jogo {
     ligaLogo: string;
     inicio: number;
     fim: number;
-    canal: Channel;
+    canal?: Channel;
     /** "pre", "in" ou "post", quando a ESPN conhece o jogo. */
     estado: string;
     placar: string;
