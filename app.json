@@ -2,7 +2,7 @@
   "expo": {
     "name": "Saimo-TV",
     "slug": "saimo-v2",
-    "version": "3.0.0",
+    "version": "3.0.2",
     "orientation": "default",
     "icon": "./assets/images/saimo_tv_logo.png",
     "scheme": "saimo",

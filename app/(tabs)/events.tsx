@@ -193,7 +193,7 @@ export default function EventsScreen() {
   );
 
   const carregar = useCallback(async (abrindo = false) => {
-    if (buscando.current || canais.length === 0) return;
+    if (buscando.current) return;
     buscando.current = true;
     const lidos = await buscarJogos(canais, abrindo);
     buscando.current = false;
