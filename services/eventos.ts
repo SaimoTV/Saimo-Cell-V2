@@ -101,12 +101,21 @@ export function emAltaResolucao(url: string): string {
     return url.slice(0, inicio) + ajustes + url.slice(fim);
 }
 
+function limparNomeCanal(texto: string): string {
+    return texto
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\b(fhd|uhd|4k|hd|sd|h265|hevc|br|pt|tv)\b/g, '')
+        .replace(/[^a-z0-9]/g, '');
+}
+
 /** O canal pelo fim do endereço do player ("…/premiere-fc" é o Premiere FC). */
 function canalDo(url: string, canais: Channel[]): Channel | undefined {
-    const slug = (url.split('/').pop() ?? '').toLowerCase().replace(/[- ]/g, '');
+    const slug = limparNomeCanal(url.split('/').pop() ?? '');
     if (!slug) return undefined;
-    const chave = (c: Channel) => c.name.toLowerCase().replace(/ /g, '');
-    return canais.find(c => chave(c) === slug) ?? canais.find(c => chave(c).includes(slug));
+    return canais.find(c => limparNomeCanal(c.name) === slug)
+        ?? canais.find(c => limparNomeCanal(c.name).includes(slug));
 }
 
 function lerAgenda(arr: any, canais: Channel[]): Jogo[] {
@@ -115,10 +124,14 @@ function lerAgenda(arr: any, canais: Channel[]): Jogo[] {
     const jogos: Jogo[] = [];
     for (const o of arr) {
         try {
-            const player = o?.players?.[0];
-            if (!player) continue;
-            const canal = canalDo(player, canais);
-            if (!canal) continue;
+            const players = Array.isArray(o?.players) ? o.players : [];
+            let canal: Channel | undefined;
+            for (const p of players) {
+                if (typeof p === 'string') {
+                    canal = canalDo(p, canais);
+                    if (canal) break;
+                }
+            }
             const inicio = new Date(o.time_start).getTime();
             if (isNaN(inicio)) continue;
             const fimLido = o.time_end ? new Date(o.time_end).getTime() : NaN;
