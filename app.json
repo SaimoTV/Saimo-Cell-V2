@@ -2,7 +2,7 @@
   "expo": {
     "name": "Saimo-TV",
     "slug": "saimo-v2",
-    "version": "3.0.3",
+    "version": "3.0.4",
     "orientation": "default",
     "icon": "./assets/images/saimo_tv_logo.png",
     "scheme": "saimo",
@@ -24,8 +24,8 @@
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
         },
-        "NSPhotoLibraryAddUsageDescription": "Saimo TV salva seus downloads na Galeria para você assistir offline em outros apps.",
-        "NSPhotoLibraryUsageDescription": "Saimo TV organiza seus downloads em um álbum na Galeria.",
+        "NSPhotoLibraryAddUsageDescription": "Saimo TV salva seus downloads na Galeria para voc\u00ea assistir offline em outros apps.",
+        "NSPhotoLibraryUsageDescription": "Saimo TV organiza seus downloads em um \u00e1lbum na Galeria.",
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "O Saimo TV usa a rede local para encontrar a sua TV Box (Saimo Connect) e aparelhos com Chromecast.",
         "NSBonjourServices": [
@@ -33,7 +33,7 @@
           "_CC1AD845._googlecast._tcp"
         ]
       },
-      "buildNumber": "1",
+      "buildNumber": "3.0.4",
       "icon": "./assets/images/saimo_tv_icon_ios.png",
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -76,7 +76,7 @@
         "backgroundColor": "#0A0A0F"
       },
       "package": "com.saimo.tv",
-      "versionCode": 30000,
+      "versionCode": 30004,
       "permissions": [
         "INTERNET",
         "VIBRATE",
@@ -165,8 +165,8 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Saimo TV organiza seus downloads em um álbum na Galeria.",
-          "savePhotosPermission": "Saimo TV salva seus downloads na Galeria para você assistir offline em outros apps.",
+          "photosPermission": "Saimo TV organiza seus downloads em um \u00e1lbum na Galeria.",
+          "savePhotosPermission": "Saimo TV salva seus downloads na Galeria para voc\u00ea assistir offline em outros apps.",
           "isAccessMediaLocationEnabled": true
         }
       ],
