@@ -3,9 +3,10 @@ import '../services/semLogs';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Text, Platform } from 'react-native';
+import { Text, Platform, Alert } from 'react-native';
 import { enableLayoutAnimations } from 'react-native-reanimated';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
 import { Colors } from '../constants/Colors';
 
@@ -21,6 +22,8 @@ import { useDownloadStore } from '../stores/downloadStore';
 import { initNotifications } from '../services/downloadNotifications';
 import { iniciar as iniciarTelemetria } from '../services/telemetria';
 import { saimoConnect } from '../services/saimoConnect';
+import { carregarAddons, instalarAddon, normalizarUrlAddon } from '../services/addons';
+import { carregarDebridConfig } from '../services/debrid';
 import { deveMostrarApoie } from '../services/apoieNaVersao';
 import { useConnectStore } from '../stores/connectStore';
 
@@ -43,8 +46,53 @@ if (Platform.OS === 'android') {
 
 export default function RootLayout() {
   const router = useRouter();
+  const ultimoDeepLinkRef = useRef<string>('');
 
   useEffect(() => {
+    void carregarAddons();
+    void carregarDebridConfig();
+
+    const processarDeepLinkAddon = (rawUrl: string | null | undefined) => {
+      if (!rawUrl || !/^stremio:\/\//i.test(rawUrl.trim())) return;
+      const limpo = rawUrl.trim();
+      if (ultimoDeepLinkRef.current === limpo) return;
+      ultimoDeepLinkRef.current = limpo;
+
+      try {
+        const parsed = normalizarUrlAddon(limpo);
+        Alert.alert(
+          'Instalar Addon Stremio',
+          `Deseja adicionar este addon ao Saimo?\n\n${parsed.transportUrl}`,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Instalar',
+              onPress: () => {
+                void instalarAddon(parsed.transportUrl)
+                  .then((addon) => {
+                    Alert.alert('Addon instalado', `${addon.name} (v${addon.version}) está pronto para uso.`);
+                  })
+                  .catch((err) => {
+                    Alert.alert(
+                      'Não foi possível instalar',
+                      err instanceof Error ? err.message : 'Verifique o endereço do addon.',
+                    );
+                  });
+              },
+            },
+          ],
+        );
+      } catch (err) {
+        Alert.alert(
+          'Link de addon inválido',
+          err instanceof Error ? err.message : 'Endereço stremio:// inválido.',
+        );
+      }
+    };
+
+    Linking.getInitialURL().then(processarDeepLinkAddon).catch(() => {});
+    const linkSub = Linking.addEventListener('url', ({ url }) => processarDeepLinkAddon(url));
+
     // Request notification permission immediately on app open (before any download)
     initNotifications().catch(() => {});
 
@@ -89,7 +137,10 @@ export default function RootLayout() {
       router.push('/(tabs)/downloads' as any);
     });
 
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      linkSub.remove();
+    };
   }, [router]);
 
   return (

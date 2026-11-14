@@ -35,7 +35,9 @@ import {
 import { loadDestaques, type DestaqueRow } from '../../services/saimoSources';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useLinksStore } from '../../stores/linksStore';
-import { getTrendingToday, getTrendingWeek } from '../../services/trendingService';
+import { clearTrendingCache, getTrendingToday, getTrendingWeek } from '../../services/trendingService';
+import { aoMudarAddons, carregarAddons, getAddonsAtivos, pedirAbrirAddons } from '../../services/addons';
+import { pedirAdicionarLista } from '../../services/minhasListas';
 import type { MediaItem } from '../../types';
 import MediaRow from '../../components/MediaRow';
 import MediaCard from '../../components/MediaCard';
@@ -160,7 +162,28 @@ export default function MoviesScreen() {
   const { adultUnlocked } = useSettingsStore();
   const linksProntos = useLinksStore(s => s.pronto);
   const linkFilmes = useLinksStore(s => s.linkFilmes);
-  const semEndereco = linksProntos && !linkFilmes;
+  const [addonsProntos, setAddonsProntos] = useState(false);
+  const [addonsChave, setAddonsChave] = useState('');
+
+  useEffect(() => {
+    const atualizarAddons = () => {
+      const ativos = getAddonsAtivos();
+      setAddonsChave(ativos.map((a) => `${a.id}:${a.order}`).join('|'));
+    };
+    carregarAddons().then(() => {
+      if (!mountedRef.current) return;
+      atualizarAddons();
+      setAddonsProntos(true);
+    });
+    return aoMudarAddons(() => {
+      if (!mountedRef.current) return;
+      atualizarAddons();
+      setAddonsProntos(true);
+    });
+  }, []);
+
+  const temAddonsAtivos = addonsChave.length > 0;
+  const semEndereco = linksProntos && addonsProntos && !linkFilmes && !temAddonsAtivos;
 
   const mountedRef = useRef(true);
   const catalogLoadedRef = useRef(false);
@@ -224,14 +247,15 @@ export default function MoviesScreen() {
     }
   }, []);
 
-  // O catálogo e as fileiras de destaque saem do endereço da lista de filmes e
-  // séries. Sem endereço nada é pedido e a tela mostra o estado vazio; trocado
-  // ou apagado em Ajustes > Listas, a tela recomeça daqui.
-  // As fileiras da tela inicial são sete quilobytes e não dependem do
-  // catálogo: chegam antes dele e são a primeira coisa que aparece.
+  // O catálogo e as fileiras de destaque saem da lista de filmes/séries ou, na falta dela,
+  // dos addons Stremio ativos (+ descoberta TMDB). Sem nenhum dos dois, nada é pedido.
   useEffect(() => {
-    if (!linksProntos) return;
+    if (!linksProntos || !addonsProntos) return;
     stopLoading();
+    if (!linkFilmes) {
+      clearAllCaches();
+      clearTrendingCache();
+    }
     setCategories(new Map());
     setTotalLoaded(0);
     setTrendingToday([]);
@@ -240,25 +264,27 @@ export default function MoviesScreen() {
     setDestaques([]);
     catalogLoadedRef.current = false;
     trendingLoadedRef.current = false;
-    if (!linkFilmes) { setLoading(false); return; }
+    if (!linkFilmes && !temAddonsAtivos) { setLoading(false); return; }
     let active = true;
     loadCatalog(false);
-    loadDestaques()
-      .then(rows => { if (active) setDestaques(rows); })
-      .catch(e => console.warn('[Movies] destaques:', e));
+    if (linkFilmes) {
+      loadDestaques()
+        .then(rows => { if (active) setDestaques(rows); })
+        .catch(e => console.warn('[Movies] destaques:', e));
+    }
     return () => { active = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linksProntos, linkFilmes]);
+  }, [linksProntos, addonsProntos, linkFilmes, addonsChave]);
 
   useEffect(() => {
-    if (linkFilmes && !loading && !trendingLoadedRef.current) {
+    if ((linkFilmes || temAddonsAtivos) && !loading && !trendingLoadedRef.current) {
       trendingLoadedRef.current = true;
       setTrendingLoading(true);
       InteractionManager.runAfterInteractions(() => {
         if (mountedRef.current) loadTrending();
       });
     }
-  }, [loading, loadTrending, linkFilmes]);
+  }, [loading, loadTrending, linkFilmes, temAddonsAtivos]);
 
   const loadCatalogFiltered = useCallback(async (page: number) => {
     // Trocar de filtro rápido dispara vários pedidos; só o último vale (uma
@@ -343,18 +369,19 @@ export default function MoviesScreen() {
     setRefreshing(true);
     stopLoading();
     clearAllCaches();
+    clearTrendingCache();
     setCategories(new Map());
     setTotalLoaded(0);
     setTrendingToday([]);
     setTrendingWeek([]);
     setCatalogResults([]);
-    loadDestaques(true).then(setDestaques).catch(() => {});
+    if (linkFilmes) loadDestaques(true).then(setDestaques).catch(() => {});
     catalogLoadedRef.current = false;
     trendingLoadedRef.current = false;
     loadCatalog(true).finally(() => {
       if (mountedRef.current) setRefreshing(false);
     });
-  }, [loadCatalog]);
+  }, [loadCatalog, linkFilmes]);
 
   const categoryData = useMemo((): CategoryRowData[] => {
     const result: CategoryRowData[] = [];
@@ -496,15 +523,23 @@ export default function MoviesScreen() {
           <Ionicons name="film-outline" size={64} color={Colors.textSecondary} />
           <Text style={styles.vazioTitulo}>Nenhum filme ou série.</Text>
           <Text style={styles.vazioTexto}>
-            Informe o endereço da lista de filmes e séries em Ajustes {'>'} Listas.
+            Adicione sua lista em Ajustes {'>'} Listas ou configure addons Stremio em Ajustes {'>'} Addons e Debrid.
           </Text>
           <TouchableOpacity
             style={styles.vazioBotao}
-            onPress={() => router.push('/(tabs)/settings' as any)}
+            onPress={() => { pedirAdicionarLista(); router.push('/(tabs)/settings' as any); }}
             accessibilityRole="button"
-            testID="filmes-abrir-ajustes"
+            testID="filmes-abrir-listas"
           >
-            <Text style={styles.trailerButtonText}>Abrir Ajustes</Text>
+            <Text style={styles.trailerButtonText}>Adicionar lista</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.vazioBotao, styles.vazioBotaoSecundario]}
+            onPress={() => { pedirAbrirAddons(); router.push('/(tabs)/settings' as any); }}
+            accessibilityRole="button"
+            testID="filmes-abrir-addons"
+          >
+            <Text style={styles.trailerButtonText}>Configurar Addons</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -657,6 +692,7 @@ const styles = StyleSheet.create({
   vazioTitulo: { color: Colors.text, fontSize: 17, fontWeight: '700', marginTop: Spacing.md, textAlign: 'center' },
   vazioTexto: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, marginTop: Spacing.sm, textAlign: 'center' },
   vazioBotao: { marginTop: Spacing.lg, backgroundColor: Colors.primary, borderRadius: BorderRadius.full, paddingHorizontal: 22, paddingVertical: 12 },
+  vazioBotaoSecundario: { marginTop: 12, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   loadingText: { color: Colors.textSecondary, marginTop: Spacing.md, fontSize: Typography.body.fontSize },
   header: {
     paddingHorizontal: Spacing.lg,

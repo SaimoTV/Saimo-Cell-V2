@@ -9,6 +9,8 @@ import { registrarPong, registrarPosicoes, limparSincronia } from './sincroniaTv
 import { pacoteDeDados, aplicarDados } from './sincroniaDados';
 import { useLinksStore } from '../stores/linksStore';
 import { aoMudar as aoMudarListas, getListas } from './minhasListas';
+import { aoMudarAddons, carregarAddons, exportarAddonsParaSync } from './addons';
+import { aoMudarDebrid, carregarDebridConfig, exportarDebridParaSync } from './debrid';
 import { useMediaStore } from '../stores/mediaStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 
@@ -196,7 +198,9 @@ class SaimoConnectService {
     const d = aoMudarListas(() => {
       if (getListas().length !== quantas) { quantas = getListas().length; this.agendarDados(1000); }
     });
-    this.pararDeVigiarDados = () => { a(); b(); c(); d(); clearTimeout(this.envioDeDados); };
+    const e = aoMudarAddons(() => { this.agendarDados(1000); });
+    const f = aoMudarDebrid(() => { this.agendarDados(1000); });
+    this.pararDeVigiarDados = () => { a(); b(); c(); d(); e(); f(); clearTimeout(this.envioDeDados); };
   }
   private initialized = false;
   // PIN já reenviado neste socket: evita laço se a TV recusar o código.
@@ -241,6 +245,7 @@ class SaimoConnectService {
 
     try {
       await initConnectStore();
+      await Promise.all([carregarAddons(), carregarDebridConfig()]);
       const store = useConnectStore.getState();
       const lastTv = store.discoveredTvs[0];
       if (lastTv?.ip) {
@@ -806,6 +811,85 @@ class SaimoConnectService {
 
   sendText(value: string): void {
     this.sendCommand({ t: 'text', value });
+  }
+
+  /** Consulta GET /addons na TV conectada (porta 8999), retornando null se indisponível. */
+  async buscarAddonsDaTv(ipOverride?: string): Promise<unknown[] | null> {
+    const ip = ipOverride || this.currentIp || useConnectStore.getState().connectedTv?.ip;
+    if (!ip) return null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      const r = await fetch(`http://${ip}:8999/addons`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!r.ok) return null;
+      const json = await r.json();
+      if (Array.isArray(json)) return json;
+      if (Array.isArray(json?.addons)) return json.addons;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Envia addons (e Debrid somente se opt-in ativo) para a TV via HTTP POST /addons (porta 8999)
+   * e também envia pacote { t: "dados" } completo via WebSocket quando conectado.
+   */
+  async enviarAddonsParaTv(): Promise<{ ok: boolean; via: 'ws' | 'http' | 'ambos' | 'nenhum'; mensagem: string }> {
+    await Promise.all([carregarAddons(), carregarDebridConfig()]);
+    const ip = this.currentIp || useConnectStore.getState().connectedTv?.ip;
+    if (!ip && !this.isConnected()) {
+      return {
+        ok: false,
+        via: 'nenhum',
+        mensagem: 'Nenhuma TV conectada no Saimo Connect. Conecte-se primeiro e tente novamente.',
+      };
+    }
+
+    const addons = exportarAddonsParaSync();
+    const debrid = exportarDebridParaSync();
+    let httpOk = false;
+
+    if (ip) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3500);
+        const r = await fetch(`http://${ip}:8999/addons`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            addons,
+            ...(debrid ? { debrid } : {}),
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        httpOk = r.ok;
+      } catch {
+        httpOk = false;
+      }
+    }
+
+    const wsOk = this.isConnected() ? this.sendCommand(pacoteDeDados()) : false;
+    if (httpOk && wsOk) {
+      return { ok: true, via: 'ambos', mensagem: `${addons.length} addon(s) enviados para a TV.` };
+    }
+    if (wsOk) {
+      return { ok: true, via: 'ws', mensagem: `${addons.length} addon(s) enviados pelo Saimo Connect.` };
+    }
+    if (httpOk) {
+      return { ok: true, via: 'http', mensagem: `${addons.length} addon(s) enviados para a TV via rede local.` };
+    }
+    return {
+      ok: false,
+      via: 'nenhum',
+      mensagem: 'Não foi possível entregar os addons à TV. Verifique se o Saimo está aberto na TV na mesma rede Wi-Fi.',
+    };
   }
 }
 

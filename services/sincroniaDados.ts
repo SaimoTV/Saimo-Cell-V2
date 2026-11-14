@@ -24,6 +24,8 @@ import { useLinksStore } from '../stores/linksStore';
 import { makeVodId, parseVodId, channelId } from './saimoSources';
 import { aplicarLinks } from './listas';
 import { adicionarLista, carregarMinhasListas, getListas, linkValido } from './minhasListas';
+import { aplicarAddonsRemotos, exportarAddonsParaSync } from './addons';
+import { aplicarDebridRemoto, exportarDebridParaSync } from './debrid';
 import { normalizarLink } from '../utils/links';
 
 interface Progresso {
@@ -83,7 +85,17 @@ export function pacoteDeDados(): Record<string, unknown> {
     em: links.linksEm,
     minhas: getListas().filter((l) => !!l.link).map((l) => ({ nome: l.nome, link: l.link as string })),
   };
-  return { t: 'dados', progresso, favTitulos, favCanais, listas };
+  const addons = exportarAddonsParaSync();
+  const debrid = exportarDebridParaSync();
+  return {
+    t: 'dados',
+    progresso,
+    favTitulos,
+    favCanais,
+    listas,
+    addons,
+    ...(debrid ? { debrid } : {}),
+  };
 }
 
 /** Os endereços e as listas adicionadas que vieram do outro aparelho. */
@@ -168,4 +180,11 @@ export function aplicarDados(msg: any): void {
   }
 
   void aplicarListas(msg?.listas).catch(() => { /* não derruba a conexão */ });
+
+  if (Array.isArray(msg?.addons)) {
+    void aplicarAddonsRemotos(msg.addons).catch(() => { /* preserva addons locais se falhar */ });
+  }
+  if (msg?.debrid && typeof msg.debrid === 'object' && !Array.isArray(msg.debrid)) {
+    void aplicarDebridRemoto(msg.debrid).catch(() => { /* não derruba a conexão */ });
+  }
 }

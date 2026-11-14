@@ -145,6 +145,22 @@ export interface Episode {
 export interface MediaSource {
     url: string;
     label?: string;
+    headers?: Record<string, string>;
+    bingeGroup?: string;
+    addonId?: string;
+    addonName?: string;
+    infoHash?: string;
+    fileIdx?: number;
+    sources?: string[];
+    subtitles?: AddonSubtitle[];
+    externalUrl?: string;
+    ytId?: string;
+    isTorrent?: boolean;
+    notWebReady?: boolean;
+    filename?: string;
+    videoSize?: number;
+    videoHash?: string;
+    kind?: AddonStreamKind;
 }
 
 export interface SeriesEpisodes {
@@ -160,6 +176,10 @@ export interface MediaItem {
     type: 'movie' | 'tv';
     isAdult: boolean;
     logo?: string;
+    imdbId?: string;
+    addonId?: string;
+    addonRawId?: string;
+    addonMeta?: AddonMeta;
     totalSeasons?: number;
     totalEpisodes?: number;
     tmdb?: TMDBData;
@@ -263,4 +283,189 @@ export interface DownloadTask {
     createdAt: number;
     speedBps?: number;
     eta?: number;
+}
+
+// ===== STREMIO ADDON & DEBRID TYPES =====
+
+export type AddonContentType = 'movie' | 'series' | 'channel' | 'tv' | string;
+
+export interface AddonResourceObj {
+    name: string;
+    types?: string[];
+    idPrefixes?: string[];
+}
+
+export type AddonResource = string | AddonResourceObj;
+
+export interface AddonCatalogExtra {
+    name: string;
+    isRequired?: boolean;
+    options?: string[];
+    optionsLimit?: number;
+}
+
+export interface AddonCatalogDef {
+    type: string;
+    id: string;
+    name?: string;
+    extra?: AddonCatalogExtra[];
+    extraSupported?: string[];
+    extraRequired?: string[];
+}
+
+export interface AddonBehaviorHints {
+    adult?: boolean;
+    p2p?: boolean;
+    configurable?: boolean;
+    configurationRequired?: boolean;
+}
+
+export interface AddonManifest {
+    id: string;
+    name: string;
+    version: string;
+    description?: string;
+    logo?: string;
+    background?: string;
+    types: string[];
+    resources: AddonResource[];
+    catalogs: AddonCatalogDef[];
+    idPrefixes?: string[];
+    behaviorHints?: AddonBehaviorHints;
+}
+
+export interface InstalledAddon {
+    id: string;
+    name: string;
+    version: string;
+    description?: string;
+    logo?: string;
+    /** URL normalizada do manifesto (/manifest.json + ?query preservada) */
+    transportUrl: string;
+    /** Alias compatível com Saimo Connect (mesmo valor de transportUrl) */
+    url: string;
+    /** Base da URL sem /manifest.json (com ?query separada internamente) */
+    baseUrl: string;
+    enabled: boolean;
+    order: number;
+    manifest: AddonManifest;
+    addedAt: number;
+    hydrated?: boolean;
+}
+
+export interface AddonSubtitle {
+    id?: string;
+    url: string;
+    lang: string;
+    label?: string;
+    addonId?: string;
+    addonName?: string;
+}
+
+export interface AddonStreamBehaviorHints {
+    notWebReady?: boolean;
+    bingeGroup?: string;
+    countryWhitelist?: string[];
+    proxyHeaders?: {
+        request?: Record<string, string>;
+        response?: Record<string, string>;
+    };
+    filename?: string;
+    videoSize?: number;
+    videoHash?: string;
+}
+
+export interface AddonStream {
+    url?: string;
+    ytId?: string;
+    infoHash?: string;
+    fileIdx?: number;
+    externalUrl?: string;
+    name?: string;
+    title?: string;
+    description?: string;
+    subtitles?: AddonSubtitle[];
+    sources?: string[];
+    behaviorHints?: AddonStreamBehaviorHints;
+    addonId?: string;
+    addonName?: string;
+}
+
+export type AddonStreamKind = 'direct' | 'torrent' | 'external' | 'youtube' | 'invalid';
+
+export interface AddonStreamResolved {
+    addonId: string;
+    addonName: string;
+    kind: AddonStreamKind;
+    stream: AddonStream;
+    url?: string;
+    externalUrl?: string;
+    ytId?: string;
+    infoHash?: string;
+    fileIdx?: number;
+    sources?: string[];
+    headers?: Record<string, string>;
+    bingeGroup?: string;
+    subtitles: AddonSubtitle[];
+    title: string;
+    subtitle?: string;
+    notWebReady?: boolean;
+    filename?: string;
+    videoSize?: number;
+    videoHash?: string;
+}
+
+export interface AddonMetaVideo {
+    id: string;
+    title?: string;
+    name?: string;
+    season?: number;
+    episode?: number;
+    released?: string;
+    overview?: string;
+    thumbnail?: string;
+    streams?: AddonStream[];
+}
+
+export interface AddonMeta {
+    id: string;
+    type: string;
+    name: string;
+    poster?: string;
+    background?: string;
+    logo?: string;
+    description?: string;
+    releaseInfo?: string;
+    imdbRating?: string | number;
+    genres?: string[];
+    runtime?: string;
+    cast?: string[];
+    director?: string[];
+    writer?: string[];
+    country?: string;
+    language?: string;
+    imdb_id?: string;
+    tmdb_id?: number | string;
+    videos?: AddonMetaVideo[];
+}
+
+export type DebridProviderId = 'torbox' | 'realdebrid' | 'alldebrid' | 'premiumize';
+
+export interface DebridProviderConfig {
+    apiKey: string;
+    enabled: boolean;
+}
+
+export interface DebridConfig {
+    providers: Record<DebridProviderId, DebridProviderConfig>;
+    sincronizarConnect: boolean;
+}
+
+export interface AddonSyncEntry {
+    url: string;
+    transportUrl: string;
+    enabled: boolean;
+    order: number;
+    id: string;
+    name: string;
 }

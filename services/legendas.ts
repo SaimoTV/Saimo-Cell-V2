@@ -13,8 +13,11 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
+import type { AddonSubtitle } from '../types';
 
+import { buscarLegendasAddons } from './addons';
 import { baseFilmes } from './enderecos';
+import { resolverImdbPorTmdb } from './tmdbService';
 
 const OPENSUBTITLES = 'https://opensubtitles-v3.strem.io/subtitles';
 const FRAGMENTOS = 100;
@@ -30,12 +33,23 @@ const IDIOMAS = [
 
 export interface LegendaOpcao {
   id: string;
-  /** Código do OpenSubtitles: "pob", "por", "eng", "spa". */
+  /** Código do idioma (ex.: "pob", "por", "eng", "spa", "pt-br"). */
   idioma: string;
   /** ISO 639-1, que é o que o player entende. */
   iso: string;
   rotulo: string;
   url: string;
+  origem?: string;
+  formato?: 'srt' | 'vtt';
+}
+
+export interface BuscarLegendasExtras {
+  imdbId?: string;
+  addonRawId?: string;
+  inlineSubtitles?: AddonSubtitle[];
+  filename?: string;
+  videoSize?: number;
+  videoHash?: string;
 }
 
 const fragmentos = new Map<string, Promise<Map<number, string>>>();
@@ -65,73 +79,155 @@ function fragmentoDe(serie: boolean, tmdb: number): Promise<Map<number, string>>
   return pronto;
 }
 
-/** As legendas do título, do melhor idioma para o pior. Vazio quando não há. */
-export function buscarLegendas(
-  tmdbId: number | undefined, serie: boolean, temporada = 0, episodio = 0,
+function mapearIdioma(langRaw: string): { codigo: string; iso: string; rotuloBase: string } {
+  const norm = (langRaw || '').trim().toLowerCase();
+  if (norm === 'pob' || norm === 'pt-br' || norm === 'pt_br' || norm === 'pb') {
+    return { codigo: 'pob', iso: 'pt', rotuloBase: 'Português (Brasil)' };
+  }
+  if (norm === 'por' || norm === 'pt' || norm === 'pt-pt') {
+    return { codigo: 'por', iso: 'pt', rotuloBase: 'Português' };
+  }
+  if (norm === 'eng' || norm === 'en' || norm.startsWith('en-')) {
+    return { codigo: 'eng', iso: 'en', rotuloBase: 'Inglês' };
+  }
+  if (norm === 'spa' || norm === 'es' || norm.startsWith('es-')) {
+    return { codigo: 'spa', iso: 'es', rotuloBase: 'Espanhol' };
+  }
+  const iso = norm.slice(0, 2) || 'und';
+  return { codigo: norm || 'und', iso, rotuloBase: langRaw || 'Legenda' };
+}
+
+function mapearAddonSubtitles(subs: AddonSubtitle[], origemFallback: string): LegendaOpcao[] {
+  const saida: LegendaOpcao[] = [];
+  subs.forEach((s, idx) => {
+    if (!s?.url) return;
+    const info = mapearIdioma(s.lang);
+    const origem = s.addonName || origemFallback;
+    const detalhe = s.label || origem;
+    saida.push({
+      id: `ext-${(s.addonId || 'inline').replace(/[^\w-]/g, '_')}-${s.id || idx}`,
+      idioma: info.codigo,
+      iso: info.iso,
+      rotulo: `${info.rotuloBase} · ${detalhe}`,
+      url: s.url,
+      origem,
+      formato: /\.vtt(\?|$)/i.test(s.url) ? 'vtt' : 'srt',
+    });
+  });
+  return saida;
+}
+
+/** As legendas do título (inline do stream + addons Stremio + OpenSubtitles), do melhor idioma para o pior. */
+export async function buscarLegendas(
+  tmdbId: number | undefined,
+  serie: boolean,
+  temporada = 0,
+  episodio = 0,
+  extras?: BuscarLegendasExtras,
 ): Promise<LegendaOpcao[]> {
-  if (!tmdbId) return Promise.resolve([]);
-  const chave = `${serie ? 's' : 'f'}|${tmdbId}|${temporada}|${episodio}`;
-  let pronta = listas.get(chave);
+  const inlineOpcoes = mapearAddonSubtitles(extras?.inlineSubtitles ?? [], 'Stream');
+
+  const chaveBase = `${serie ? 's' : 'f'}|${tmdbId ?? 0}|${extras?.imdbId ?? ''}|${temporada}|${episodio}|${extras?.addonRawId ?? ''}`;
+  let pronta = listas.get(chaveBase);
   if (!pronta) {
     pronta = (async () => {
-      const imdb = (await fragmentoDe(serie, tmdbId)).get(tmdbId);
-      if (!imdb) return [];
-      const alvo = serie && temporada > 0
-        ? `series/${imdb}:${temporada}:${episodio}` : `movie/${imdb}`;
-      const r = await fetch(`${OPENSUBTITLES}/${alvo}.json`);
-      if (!r.ok) return [];
-      const json = await r.json() as { subtitles?: Record<string, unknown>[] };
-      const saida: LegendaOpcao[] = [];
-      for (const idioma of IDIOMAS) {
-        (json.subtitles ?? [])
-          .filter((s) => s.lang === idioma.codigo && s.url)
-          .slice(0, idioma.limite)
-          .forEach((s, i) => {
-            const versao = String(s.releaseGroup || s.releaseFormat || '').trim();
-            saida.push({
-              id: `${idioma.codigo}-${s.id ?? i}`,
-              idioma: idioma.codigo,
-              iso: idioma.iso,
-              rotulo: `${idioma.rotulo} · ${versao || i + 1}`,
-              url: String(s.url),
-            });
-          });
+      let imdb = extras?.imdbId;
+      if (!imdb && tmdbId) {
+        imdb = (await fragmentoDe(serie, tmdbId)).get(tmdbId);
       }
-      return saida;
+      if (!imdb && tmdbId && tmdbId > 0) {
+        imdb = await resolverImdbPorTmdb(tmdbId, serie);
+      }
+
+      const tipoAddon: 'movie' | 'series' = serie ? 'series' : 'movie';
+      const [addonsSubs, osSubs] = await Promise.all([
+        buscarLegendasAddons({
+          type: tipoAddon,
+          imdbId: imdb,
+          tmdbId,
+          addonRawId: extras?.addonRawId,
+          season: temporada > 0 ? temporada : undefined,
+          episode: episodio > 0 ? episodio : undefined,
+          filename: extras?.filename,
+          videoSize: extras?.videoSize,
+          videoHash: extras?.videoHash,
+        }).catch(() => [] as AddonSubtitle[]),
+        (async () => {
+          if (!imdb) return [] as LegendaOpcao[];
+          const alvo = serie && temporada > 0
+            ? `series/${imdb}:${temporada}:${episodio}` : `movie/${imdb}`;
+          const r = await fetch(`${OPENSUBTITLES}/${alvo}.json`);
+          if (!r.ok) return [] as LegendaOpcao[];
+          const json = await r.json() as { subtitles?: Record<string, unknown>[] };
+          const out: LegendaOpcao[] = [];
+          for (const idioma of IDIOMAS) {
+            (json.subtitles ?? [])
+              .filter((s) => s.lang === idioma.codigo && s.url)
+              .slice(0, idioma.limite)
+              .forEach((s, i) => {
+                const versao = String(s.releaseGroup || s.releaseFormat || '').trim();
+                out.push({
+                  id: `${idioma.codigo}-${s.id ?? i}`,
+                  idioma: idioma.codigo,
+                  iso: idioma.iso,
+                  rotulo: `${idioma.rotulo} · ${versao || i + 1}`,
+                  url: String(s.url),
+                  origem: 'OpenSubtitles',
+                  formato: 'srt',
+                });
+              });
+          }
+          return out;
+        })().catch(() => [] as LegendaOpcao[]),
+      ]);
+
+      return [
+        ...mapearAddonSubtitles(addonsSubs, 'Addon'),
+        ...osSubs,
+      ];
     })().catch(() => []);
-    // Lista vazia por falha não fica guardada; vazia de verdade custa pouco.
-    pronta.then((l) => { if (!l.length) setTimeout(() => listas.delete(chave), 60_000); });
-    listas.set(chave, pronta);
+    pronta.then((l) => { if (!l.length) setTimeout(() => listas.delete(chaveBase), 60_000); });
+    listas.set(chaveBase, pronta);
   }
-  return pronta;
+
+  const remotas = await pronta;
+  const combinadas: LegendaOpcao[] = [];
+  const vistas = new Set<string>();
+  for (const op of [...inlineOpcoes, ...remotas]) {
+    if (!op.url || vistas.has(op.url)) continue;
+    vistas.add(op.url);
+    combinadas.push(op);
+  }
+  return combinadas;
 }
 
 const TEMPO = /(\d+):(\d{2}):(\d{2})[,.](\d{1,3})/g;
 
-function formatar(ms: number): string {
+function formatar(ms: number, sep = ','): string {
   const t = Math.max(0, Math.round(ms));
   const p = (n: number, c = 2) => String(n).padStart(c, '0');
-  return `${p(Math.floor(t / 3_600_000))}:${p(Math.floor(t / 60_000) % 60)}:${p(Math.floor(t / 1000) % 60)},${p(t % 1000, 3)}`;
+  return `${p(Math.floor(t / 3_600_000))}:${p(Math.floor(t / 60_000) % 60)}:${p(Math.floor(t / 1000) % 60)}${sep}${p(t % 1000, 3)}`;
 }
 
 /**
- * O mesmo SRT com todas as marcas de tempo deslocadas em [segundos] (positivo
+ * O mesmo SRT/VTT com todas as marcas de tempo deslocadas em [segundos] (positivo
  * atrasa, negativo adianta). O player nativo não tem atraso de legenda, então
  * o ajuste é feito no próprio arquivo, antes de entregar.
  */
 export function deslocarSrt(srt: string, segundos: number): string {
   if (!segundos) return srt;
   const delta = Math.round(segundos * 1000);
+  const sep = /^\s*WEBVTT/i.test(srt) ? '.' : ',';
   return srt.split('\n').map((linha) => (linha.includes('-->')
     ? linha.replace(TEMPO, (_m, h, m, s, ms) =>
-      formatar(Number(h) * 3_600_000 + Number(m) * 60_000 + Number(s) * 1000 + Number(String(ms).padEnd(3, '0')) + delta))
+      formatar(Number(h) * 3_600_000 + Number(m) * 60_000 + Number(s) * 1000 + Number(String(ms).padEnd(3, '0')) + delta, sep))
     : linha)).join('\n');
 }
 
 const arquivos = new Map<string, Promise<string | null>>();
 
 /**
- * Baixa a legenda, aplica o atraso e devolve o endereço de um arquivo local —
+ * Baixa a legenda (.srt ou .vtt), aplica o atraso e devolve o endereço de um arquivo local —
  * o `react-native-video` abre `file://`, e assim o atraso não custa rede.
  */
 export async function baixarLegenda(opcao: LegendaOpcao, atraso = 0): Promise<string | null> {
@@ -145,13 +241,15 @@ export async function baixarLegenda(opcao: LegendaOpcao, atraso = 0): Promise<st
     arquivos.set(opcao.url, texto);
     texto.then((t) => { if (!t) arquivos.delete(opcao.url); });
   }
-  const srt = await texto;
-  if (!srt) return null;
+  const conteudo = await texto;
+  if (!conteudo) return null;
+  const ehVtt = opcao.formato === 'vtt' || /^\s*WEBVTT/i.test(conteudo) || /\.vtt(\?|$)/i.test(opcao.url);
+  const ext = ehVtt ? 'vtt' : 'srt';
   const pasta = `${FileSystem.cacheDirectory ?? ''}legendas/`;
   try {
     await FileSystem.makeDirectoryAsync(pasta, { intermediates: true });
-    const arquivo = `${pasta}${opcao.id.replace(/[^\w-]/g, '_')}_${Math.round(atraso * 1000)}.srt`;
-    await FileSystem.writeAsStringAsync(arquivo, deslocarSrt(srt, atraso));
+    const arquivo = `${pasta}${opcao.id.replace(/[^\w-]/g, '_')}_${Math.round(atraso * 1000)}.${ext}`;
+    await FileSystem.writeAsStringAsync(arquivo, deslocarSrt(conteudo, atraso));
     return arquivo;
   } catch {
     return null;
