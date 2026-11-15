@@ -619,7 +619,7 @@ async function loadSeriesEpisodes(item: MediaItem, letter: string): Promise<Medi
     if (line.startsWith('@')) {
       if (inside) break;
       const [title, year = ''] = line.slice(1).split('\t');
-      inside = title === parsed.title && year === parsed.year;
+      inside = title === parsed.title && (year === parsed.year || !year || !parsed.year);
       continue;
     }
     if (!inside) continue;
