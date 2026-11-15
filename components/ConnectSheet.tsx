@@ -181,6 +181,14 @@ export default function ConnectSheet() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
+                    style={styles.actionBtnSecondary}
+                    onPress={() => useConnectStore.getState().setSincroniaPergunta(connectedTv)}
+                  >
+                    <Ionicons name="sync" size={18} color={Colors.textSecondary} />
+                    <Text style={styles.actionBtnSecondaryText}>Sincronização com esta TV</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
                     style={styles.disconnectBtn}
                     onPress={handleDisconnect}
                   >
@@ -337,7 +345,9 @@ export default function ConnectSheet() {
                       </View>
                     ) : (
                       <View style={styles.connectBtnSmall}>
-                        <Text style={styles.connectBtnSmallText}>Conectar</Text>
+                        <Text style={styles.connectBtnSmallText}>
+                          {status === 'connected' ? 'Trocar para esta' : 'Conectar'}
+                        </Text>
                       </View>
                     )}
                   </TouchableOpacity>

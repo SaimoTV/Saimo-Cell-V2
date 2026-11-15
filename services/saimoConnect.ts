@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useConnectStore, initConnectStore, DiscoveredTv, TvState, PhoneAudioMode } from '../stores/connectStore';
 import { registrarPong, registrarPosicoes, limparSincronia } from './sincroniaTv';
 import { pacoteDeDados, aplicarDados } from './sincroniaDados';
+import { algumaLigada, escolhaDaTv, guardarEscolha, NADA, type EscolhaSincronia } from './connectSincronia';
 import { useLinksStore } from '../stores/linksStore';
 import { aoMudar as aoMudarListas, getListas } from './minhasListas';
 import { aoMudarAddons, carregarAddons, exportarAddonsParaSync } from './addons';
@@ -16,6 +17,8 @@ import { useFavoritesStore } from '../stores/favoritesStore';
 
 const CONNECT_CHANNEL_ID = 'saimo-connect-channel';
 const CONNECT_NOTIF_ID = 'saimo-connect-ongoing';
+
+const CHAVE_DESCONECTADO = '@saimo_connect_desconectado';
 
 async function setupConnectNotificationChannel(): Promise<void> {
   if (Platform.OS === 'android') {
@@ -171,6 +174,15 @@ class SaimoConnectService {
   /** Sincronia de progresso e favoritos com a TV (ver sincroniaDados). */
   private aplicandoDados = false;
   private envioDeDados: any = null;
+  /** O que a pessoa aceitou sincronizar com a TV conectada (null = ainda não respondeu). */
+  private sincronia: EscolhaSincronia | null = null;
+  /** Última TV em que o celular esteve conectado (id e IP). */
+  private ultimaTvId: string | null = null;
+
+  private ehUltimaTv(tv: DiscoveredTv): boolean {
+    if (!this.lastKnownIp && !this.ultimaTvId) return true;
+    return tv.ip === this.lastKnownIp || (!!this.ultimaTvId && tv.id === this.ultimaTvId);
+  }
   private pararDeVigiarDados: (() => void) | null = null;
 
   /** Manda progresso e favoritos daqui a pouco, juntando mudanças seguidas. */
@@ -178,7 +190,9 @@ class SaimoConnectService {
     if (this.aplicandoDados) return;
     clearTimeout(this.envioDeDados);
     this.envioDeDados = setTimeout(() => {
-      if (useConnectStore.getState().status === 'connected') this.sendCommand(pacoteDeDados());
+      if (useConnectStore.getState().status === 'connected' && algumaLigada(this.sincronia)) {
+        this.sendCommand(pacoteDeDados(this.sincronia!));
+      }
     }, atrasoMs);
   }
 
@@ -246,14 +260,21 @@ class SaimoConnectService {
     try {
       await initConnectStore();
       await Promise.all([carregarAddons(), carregarDebridConfig()]);
-      const store = useConnectStore.getState();
-      const lastTv = store.discoveredTvs[0];
+      // Reconecta sozinho só na última TV em que estava (não na primeira da
+      // lista) e não reconecta se a pessoa desconectou de propósito.
+      const ultima = await AsyncStorage.getItem('@saimo_connect_last_tv').catch(() => null);
+      const lastTv = ultima ? (JSON.parse(ultima) as DiscoveredTv) : null;
       if (lastTv?.ip) {
         this.lastKnownIp = lastTv.ip;
+        this.ultimaTvId = lastTv.id ?? null;
       }
-
-      // Inicia auto-conexão imediata e silenciosa
-      this.startAutoConnect(lastTv?.ip);
+      if (await AsyncStorage.getItem(CHAVE_DESCONECTADO).catch(() => null)) {
+        this.userExplicitlyDisconnected = true;
+        this.autoConnect = false;
+      } else {
+        // Inicia auto-conexão imediata e silenciosa
+        this.startAutoConnect(lastTv?.ip);
+      }
 
       // Verificação periódica em segundo plano (a cada 12 segundos)
       if (this.autoScanInterval) clearInterval(this.autoScanInterval);
@@ -326,7 +347,9 @@ class SaimoConnectService {
         if (ok) {
           foundTvs.push(ok);
           // Se autoConnect estiver ligado e não estiver conectado, conecta na hora!
-          if (this.autoConnect && !this.isConnected() && !this.userExplicitlyDisconnected) {
+          // Sozinho, só volta para a última TV; as outras ficam na lista para escolher.
+          if (this.autoConnect && !this.isConnected() && !this.userExplicitlyDisconnected &&
+              this.ehUltimaTv(ok)) {
             this.connect(ok.ip);
             return foundTvs;
           }
@@ -368,8 +391,9 @@ class SaimoConnectService {
             if (r && !foundTvs.some((t) => t.id === r.id)) {
               foundTvs.push(r);
               useConnectStore.getState().addDiscoveredTv(r);
-              // Conecta automaticamente na primeira TV que responder!
-              if (this.autoConnect && !this.isConnected() && !this.userExplicitlyDisconnected) {
+              // Sozinho, conecta na última TV usada (mesmo que tenha trocado de IP)
+              // ou, se nunca conectou, na primeira que responder.
+              if (this.autoConnect && !this.isConnected() && !this.userExplicitlyDisconnected && this.ehUltimaTv(r)) {
                 this.connect(r.ip);
                 break;
               }
@@ -458,6 +482,7 @@ class SaimoConnectService {
     }
 
     this.disconnectInternal();
+    AsyncStorage.removeItem(CHAVE_DESCONECTADO).catch(() => {});
     this.currentIp = ip;
     this.lastKnownIp = ip;
     this.currentPin = pin || null;
@@ -532,6 +557,8 @@ class SaimoConnectService {
         };
         store.addDiscoveredTv(tvObj);
         store.setConnectedTv(tvObj);
+        this.ultimaTvId = tvId;
+        this.lastKnownIp = ip;
 
         // Mostra notificação contínua no Android para manter segundo plano vivo
         showConnectNotification(tvName);
@@ -545,15 +572,26 @@ class SaimoConnectService {
         if (store.phoneAudioMode !== 'none') {
           this.sendCommand({ t: 'phoneAudio', src: store.phoneAudioMode });
         }
-        // Progresso e favoritos vão à TV assim que conecta, e depois a cada mudança.
-        this.sendCommand(pacoteDeDados());
-        this.vigiarDados();
+        // Sincronizar é escolha da pessoa, por TV: na primeira vez pergunta.
+        this.sincronia = null;
+        this.pararDeVigiarDados?.();
+        this.pararDeVigiarDados = null;
+        void escolhaDaTv(tvId).then((escolha) => {
+          if (useConnectStore.getState().connectedTv?.id !== tvId) return;
+          if (escolha === null) {
+            useConnectStore.getState().setSincroniaPergunta(tvObj);
+          } else {
+            this.aplicarEscolhaSincronia(escolha);
+          }
+        });
         break;
       }
       case 'dados': {
         // O que veio da TV não volta para ela como se fosse mudança daqui.
+        // Sem aceite para esta TV, nada do que ela manda entra no celular.
+        if (!algumaLigada(this.sincronia)) break;
         this.aplicandoDados = true;
-        try { aplicarDados(msg); } finally { this.aplicandoDados = false; }
+        try { aplicarDados(msg, this.sincronia!); } finally { this.aplicandoDados = false; }
         break;
       }
       case 'pending': {
@@ -683,17 +721,46 @@ class SaimoConnectService {
     }
   }
 
+  /** Começa (ou para) de sincronizar com a TV conectada, conforme a escolha. */
+  private aplicarEscolhaSincronia(escolha: EscolhaSincronia): void {
+    this.sincronia = escolha;
+    this.pararDeVigiarDados?.();
+    this.pararDeVigiarDados = null;
+    if (!algumaLigada(escolha) || !this.isConnected()) return;
+    this.sendCommand(pacoteDeDados(escolha));
+    this.vigiarDados();
+  }
+
+  /** Resposta da pergunta "sincronizar com esta TV?" (ou mudança depois, no Connect). */
+  async definirSincronia(tvId: string, escolha: EscolhaSincronia): Promise<void> {
+    await guardarEscolha(tvId, escolha);
+    useConnectStore.getState().setSincroniaPergunta(null);
+    if (useConnectStore.getState().connectedTv?.id === tvId) this.aplicarEscolhaSincronia(escolha);
+  }
+
+  /** Escolha atual da TV conectada (para mostrar no Connect). */
+  sincroniaAtual(): EscolhaSincronia | null {
+    return this.sincronia;
+  }
+
   /** Desconecta explicitamente a pedido do usuário */
   disconnect(userInitiated = true): void {
     if (userInitiated) {
       this.userExplicitlyDisconnected = true;
       this.autoConnect = false;
+      // Fica desconectado também ao abrir o app de novo, até tocar em "Conectar".
+      AsyncStorage.setItem(CHAVE_DESCONECTADO, '1').catch(() => {});
     }
     this.disconnectInternal();
     hideConnectNotification();
     useConnectStore.getState().setStatus('disconnected');
     useConnectStore.getState().setTvState(null);
     useConnectStore.getState().setPendingPin(null);
+    useConnectStore.getState().setConnectedTv(null);
+    useConnectStore.getState().setSincroniaPergunta(null);
+    this.sincronia = null;
+    this.pararDeVigiarDados?.();
+    this.pararDeVigiarDados = null;
   }
 
   /** Envia um comando JSON para a TV Box */
@@ -891,7 +958,7 @@ class SaimoConnectService {
       }
     }
 
-    const wsOk = this.isConnected() ? this.sendCommand(pacoteDeDados()) : false;
+    const wsOk = this.isConnected() ? this.sendCommand(pacoteDeDados({ ...NADA, addons: true })) : false;
     if (httpOk && wsOk) {
       return { ok: true, via: 'ambos', mensagem: `${addons.length} addon(s) enviados para a TV.` };
     }

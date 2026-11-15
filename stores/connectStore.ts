@@ -84,6 +84,8 @@ interface ConnectStoreState {
   pendingPin: string | null;
   /** Android 17 negou o acesso à rede local: a busca e a conexão não saem do celular. */
   semPermissaoRede: boolean;
+  /** TV recém-conectada esperando a resposta de "sincronizar?". */
+  sincroniaPergunta: DiscoveredTv | null;
 
   // Ações
   setCid: (cid: string) => void;
@@ -101,6 +103,7 @@ interface ConnectStoreState {
   setTextRequest: (req: { hint: string; value: string } | null) => void;
   setPendingPin: (pin: string | null) => void;
   setSemPermissaoRede: (v: boolean) => void;
+  setSincroniaPergunta: (tv: DiscoveredTv | null) => void;
 }
 
 const STORAGE_KEY_CID = '@saimo_connect_cid';
@@ -155,6 +158,8 @@ export const useConnectStore = create<ConnectStoreState>((set, get) => ({
   setTextRequest: (textRequest) => set({ textRequest }),
   setPendingPin: (pendingPin) => set({ pendingPin }),
   setSemPermissaoRede: (semPermissaoRede) => set({ semPermissaoRede }),
+  sincroniaPergunta: null,
+  setSincroniaPergunta: (sincroniaPergunta) => set({ sincroniaPergunta }),
 }));
 
 // Inicializador de persistência leve

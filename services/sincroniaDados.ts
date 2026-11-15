@@ -27,6 +27,7 @@ import { adicionarLista, carregarMinhasListas, getListas, linkValido } from './m
 import { aplicarAddonsRemotos, exportarAddonsParaSync } from './addons';
 import { aplicarDebridRemoto, exportarDebridParaSync } from './debrid';
 import { normalizarLink } from '../utils/links';
+import { TUDO, type EscolhaSincronia } from './connectSincronia';
 
 interface Progresso {
   tipo: 'f' | 's';
@@ -49,7 +50,8 @@ function lerEpisodio(id: string): { serie: string; temporada: number; episodio: 
   return { serie: m[1], temporada: Number(m[2]), episodio: Number(m[3]) };
 }
 
-export function pacoteDeDados(): Record<string, unknown> {
+/** Pacote para a TV, só com o que a pessoa aceitou sincronizar com ela. */
+export function pacoteDeDados(escolha: EscolhaSincronia = TUDO): Record<string, unknown> {
   const media = useMediaStore.getState();
   const progresso: Progresso[] = [];
   for (const h of media.watchHistory) {
@@ -89,12 +91,10 @@ export function pacoteDeDados(): Record<string, unknown> {
   const debrid = exportarDebridParaSync();
   return {
     t: 'dados',
-    progresso,
-    favTitulos,
-    favCanais,
-    listas,
-    addons,
-    ...(debrid ? { debrid } : {}),
+    ...(escolha.historico ? { progresso } : {}),
+    ...(escolha.favoritos ? { favTitulos, favCanais } : {}),
+    ...(escolha.listas ? { listas } : {}),
+    ...(escolha.addons ? { addons, ...(debrid ? { debrid } : {}) } : {}),
   };
 }
 
@@ -128,7 +128,16 @@ async function aplicarListas(l: any): Promise<void> {
 }
 
 /** Junta o que veio da TV ao que o celular tem. */
-export function aplicarDados(msg: any): void {
+export function aplicarDados(recebido: any, escolha: EscolhaSincronia = TUDO): void {
+  // Só entra o que a pessoa aceitou sincronizar com esta TV.
+  const msg = {
+    progresso: escolha.historico ? recebido?.progresso : undefined,
+    favTitulos: escolha.favoritos ? recebido?.favTitulos : undefined,
+    favCanais: escolha.favoritos ? recebido?.favCanais : undefined,
+    listas: escolha.listas ? recebido?.listas : undefined,
+    addons: escolha.addons ? recebido?.addons : undefined,
+    debrid: escolha.addons ? recebido?.debrid : undefined,
+  };
   const lista: Progresso[] = Array.isArray(msg?.progresso) ? msg.progresso : [];
   if (lista.length) {
     useMediaStore.setState((estado) => {

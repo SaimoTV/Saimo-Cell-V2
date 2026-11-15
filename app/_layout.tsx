@@ -15,6 +15,7 @@ import Abertura from '../components/Abertura';
 import ConnectAudioHost from '../components/ConnectAudioHost';
 import ConnectSheet from '../components/ConnectSheet';
 import ConnectRemote from '../components/ConnectRemote';
+import ConnectSincronia from '../components/ConnectSincronia';
 import MultiAudioPanel from '../components/MultiAudioPanel';
 import RemoteFab from '../components/RemoteFab';
 import { downloadManager } from '../services/downloadManager';
@@ -149,6 +150,7 @@ export default function RootLayout() {
       <ConnectAudioHost />
       <ConnectSheet />
       <ConnectRemote />
+      <ConnectSincronia />
       <MultiAudioPanel />
       <RemoteFab />
       <StatusBar style="light" />
