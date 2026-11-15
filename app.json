@@ -155,7 +155,8 @@
             "buildToolsVersion": "37.0.0",
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "extraProguardRules": "-dontwarn com.tencent.mmkv.MMKV"
+            "extraProguardRules": "-dontwarn com.tencent.mmkv.MMKV",
+            "useLegacyPackaging": true
           },
           "ios": {
             "useFrameworks": "static",

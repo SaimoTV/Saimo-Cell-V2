@@ -73,6 +73,8 @@ interface ConnectStoreState {
   discoveredTvs: DiscoveredTv[];
   connectedTv: DiscoveredTv | null;
   tvState: TvState | null;
+  /** Quando o último estado chegou (para a barra do filme andar entre um e outro). */
+  tvStateEm: number;
   phoneAudioMode: PhoneAudioMode;
   audioSyncDelayMs: number;
   isSheetVisible: boolean;
@@ -112,6 +114,7 @@ export const useConnectStore = create<ConnectStoreState>((set, get) => ({
   discoveredTvs: [],
   connectedTv: null,
   tvState: null,
+  tvStateEm: 0,
   phoneAudioMode: 'none',
   audioSyncDelayMs: 0,
   isSheetVisible: false,
@@ -136,7 +139,10 @@ export const useConnectStore = create<ConnectStoreState>((set, get) => ({
     }
   },
   setTvState: (tvState) => {
-    set({ tvState });
+    const antes = get().tvState;
+    // Filme começou na TV: abre o controle, com a barra de progresso à mão.
+    const comecouFilme = tvState?.mode === 'vod' && antes?.mode !== 'vod';
+    set(comecouFilme ? { tvState, tvStateEm: Date.now(), isRemoteVisible: true } : { tvState, tvStateEm: Date.now() });
   },
   setPhoneAudioMode: (phoneAudioMode) => set({ phoneAudioMode }),
   setAudioSyncDelayMs: (audioSyncDelayMs) => {

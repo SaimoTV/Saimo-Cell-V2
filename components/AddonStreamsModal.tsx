@@ -19,6 +19,7 @@ import { buscarStreamsAddons, pedirAbrirAddons } from '../services/addons';
 import { ErroDebrid, resolverTorrentDebrid, temDebridAtivo } from '../services/debrid';
 import { resolverImdbPorTmdb } from '../services/tmdbService';
 import type { AddonStreamResolved, MediaSource } from '../types';
+import { enderecoDoTorrent, torrentEmbutidoDisponivel } from '../modules/saimo-torrent';
 
 export interface AddonStreamPicked {
   resolved: AddonStreamResolved;
@@ -149,6 +150,27 @@ export default function AddonStreamsModal({
         imdbId: imdbResolvido,
       });
       onClose();
+      return;
+    }
+
+    // Sem Debrid, o torrent toca pelo motor embutido (Android, versão do GitHub).
+    if (item.kind === 'torrent' && item.infoHash && !temDebridAtivo() && torrentEmbutidoDisponivel()) {
+      setResolvendoIdx(index);
+      try {
+        const url = await enderecoDoTorrent(item.infoHash, item.fileIdx, item.sources ?? [], item.filename);
+        const atualizado: AddonStreamResolved = { ...item, url };
+        onPickAddon({
+          resolved: atualizado,
+          resolvedUrl: url,
+          allStreams: streams.map((s, i) => (i === index ? atualizado : s)),
+          imdbId: imdbResolvido,
+        });
+        onClose();
+      } catch (err) {
+        Alert.alert('Não foi possível abrir o torrent', err instanceof Error ? err.message : 'Tente outro stream.');
+      } finally {
+        setResolvendoIdx(null);
+      }
       return;
     }
 

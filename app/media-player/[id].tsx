@@ -33,6 +33,7 @@ import {
 } from '../../services/playerStrategies';
 import { getItemAPI } from '../../services/apiService';
 import * as telemetria from '../../services/telemetria';
+import { limparTorrent } from '../../modules/saimo-torrent';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -703,6 +704,8 @@ export default function MediaPlayerScreen() {
             if (osdTimerRef.current) clearTimeout(osdTimerRef.current);
             if (nextCountdownRef.current) clearInterval(nextCountdownRef.current);
             if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+            // Filme por torrent: apaga o que o motor baixou.
+            limparTorrent();
             (async () => {
                 try {
                     await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);

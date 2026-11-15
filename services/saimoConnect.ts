@@ -805,8 +805,24 @@ class SaimoConnectService {
     this.sendCommand({ t: 'playPause' });
   }
 
+  /** Vai para a posição `ms` do filme (absoluta). */
+  irPara(ms: number): void {
+    this.sendCommand({ t: 'seek', ms: Math.max(0, Math.round(ms)) });
+  }
+
+  /** Avança (positivo) ou volta (negativo) `deltaMs` a partir de onde está. */
+  pular(deltaMs: number): void {
+    this.sendCommand({ t: 'seek', delta: Math.round(deltaMs) });
+  }
+
+  /**
+   * Compatível com o formato antigo. Atenção: `seek(10000)` sozinho é
+   * "ir para 0:10", não "avançar 10 s" (era o bug do avançar que voltava ao
+   * começo). Para pular, use `pular`.
+   */
   seek(ms: number, delta?: number): void {
-    this.sendCommand({ t: 'seek', ms, delta });
+    if (delta !== undefined) this.pular(delta);
+    else this.irPara(ms);
   }
 
   sendText(value: string): void {

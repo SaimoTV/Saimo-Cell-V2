@@ -294,7 +294,7 @@ export default function AddonsModal({ visible, onClose }: Props) {
               Serviços Debrid (Torrents em Cache via HTTPS)
             </Text>
             <Text style={styles.debridHint}>
-              O Saimo não faz download P2P/torrent direto. Informe sua chave de API para resolver links magnet/infoHash diretamente no provedor escolhido.
+              Opcional. Sem Debrid, torrents tocam pelo tocador embutido (baixa enquanto assiste, no Android). Com uma chave Debrid, abrem mais rápido.
             </Text>
 
             {ORDEM_PROVEDORES_DEBRID.map((provId) => {

@@ -15,6 +15,7 @@ import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/Colors';
 import { useConnectStore } from '../stores/connectStore';
 import { saimoConnect } from '../services/saimoConnect';
+import ControleFilme from './ControleFilme';
 
 export default function ConnectRemote() {
   const visible = useConnectStore((s) => s.isRemoteVisible);
@@ -311,57 +312,12 @@ export default function ConnectRemote() {
                     </View>
                   </View>
                 ) : tvState?.mode === 'vod' && tvState.vod ? (
-                  <View style={styles.nowPlayingCard}>
-                    <View style={styles.npRow}>
-                      <View style={styles.npLogoFallback}>
-                        <MaterialIcons name="movie" size={18} color={Colors.secondary} />
-                      </View>
-                      <View style={styles.npInfo}>
-                        <Text style={styles.npChannel} numberOfLines={1}>
-                          {tvState.vod.title}
-                        </Text>
-                        <Text style={styles.npProgram} numberOfLines={1}>
-                          {tvState.vod.subtitle || 'Filme / Série'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* CONTROLES DE REPRODUÇÃO VOD */}
-                    <View style={styles.vodControlsRow}>
-                      <TouchableOpacity style={styles.vodMiniBtn} onPress={() => saimoConnect.seek(-10000)}>
-                        <MaterialIcons name="replay-10" size={20} color={Colors.text} />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.vodPlayBtn} onPress={() => saimoConnect.playPause()}>
-                        <MaterialIcons
-                          name={tvState.playing ? 'pause' : 'play-arrow'}
-                          size={22}
-                          color="#fff"
-                        />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.vodMiniBtn} onPress={() => saimoConnect.seek(10000)}>
-                        <MaterialIcons name="forward-10" size={20} color={Colors.text} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.vodMiniBtn,
-                          phoneAudioMode !== 'none' && {
-                            backgroundColor: Colors.secondary,
-                            borderColor: Colors.secondaryLight,
-                          },
-                        ]}
-                        onPress={() => {
-                          setVisible(false);
-                          setMultiAudioVisible(true);
-                        }}
-                      >
-                        <Ionicons
-                          name="headset"
-                          size={18}
-                          color={phoneAudioMode !== 'none' ? '#fff' : Colors.text}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                  <ControleFilme
+                    onAbrirAudio={() => {
+                      setVisible(false);
+                      setMultiAudioVisible(true);
+                    }}
+                  />
                 ) : null}
 
                 {/* 2. BARRA DE NAVEGAÇÃO PRINCIPAL (VOLTAR, HOME, MENU, ESCREVER) */}

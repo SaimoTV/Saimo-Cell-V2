@@ -1,0 +1,6 @@
+{
+  "name": "saimo-torrent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tocador de torrent embutido do Saimo TV (Android, só na versão do GitHub)."
+}
