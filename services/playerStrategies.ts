@@ -69,7 +69,78 @@ export async function resolverDinamica(url: string, timeoutMs = 12000): Promise<
         clearTimeout(t);
     }
 
-    return null;
+    // Fallback: se o relay falhou ou retornou 404/520, resolve diretamente na RedeFlix
+    return await resolverRedeFlixDireto(url, timeoutMs);
+}
+
+/**
+ * Resolve diretamente da RedeFlix pelo IP do aparelho celular.
+ */
+export async function resolverRedeFlixDireto(url: string, timeoutMs = 8000): Promise<string | null> {
+    try {
+        const u = new URL(url);
+        const idRaw = (u.searchParams.get('id') || '').replace(/^tmdb:/, '');
+        const cleanId = idRaw.split(':')[0];
+        if (!cleanId || !/^\d+$/.test(cleanId)) return null;
+
+        const tipo = (u.searchParams.get('tipo') || u.searchParams.get('type') || 'movie').toLowerCase();
+        const isSerie = tipo === 'series' || tipo === 'tv';
+        const s = u.searchParams.get('s') || u.searchParams.get('temporada') || '1';
+        const e = u.searchParams.get('e') || u.searchParams.get('episodio') || '1';
+        const versao = (u.searchParams.get('versao') || u.searchParams.get('v') || 'dub').toLowerCase();
+
+        const pageUrl = isSerie
+            ? `https://redeflixapi.click/serie/${cleanId}/${s}/${e}`
+            : `https://redeflixapi.click/filme/${cleanId}`;
+
+        const c1 = new AbortController();
+        const t1 = setTimeout(() => c1.abort(), timeoutMs);
+        const pageRes = await fetch(pageUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko)',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+            signal: c1.signal,
+        });
+        clearTimeout(t1);
+        if (!pageRes.ok) return null;
+        const html = await pageRes.text();
+
+        let launchTicket = '';
+        const fastMatch = /fastLaunchTickets\s*=\s*(\{.*?\});/.exec(html);
+        if (fastMatch?.[1]) {
+            try {
+                const tickets = JSON.parse(fastMatch[1]);
+                launchTicket = versao === 'leg' ? (tickets.legendado || tickets.default) : (tickets.default || tickets.legendado);
+            } catch (_) {}
+        }
+        if (!launchTicket) {
+            const mTicket = /playbackResolveTicket\s*=\s*"([^"]+)"/.exec(html);
+            if (mTicket?.[1]) launchTicket = mTicket[1];
+        }
+        if (!launchTicket) return null;
+
+        const c2 = new AbortController();
+        const t2 = setTimeout(() => c2.abort(), timeoutMs);
+        const sourceRes = await fetch('https://redeflixapi.click/playerkys/source.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'RedeFlixPlayer',
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+                'Referer': 'https://redeflixapi.click/playerkys/index.html',
+                'Origin': 'https://redeflixapi.click',
+            },
+            body: JSON.stringify({ ticket: launchTicket }),
+            signal: c2.signal,
+        });
+        clearTimeout(t2);
+        if (!sourceRes.ok) return null;
+        const j = await sourceRes.json();
+        return j?.url || null;
+    } catch {
+        return null;
+    }
 }
 
 export async function resolveUrlViaGet(url: string, timeoutMs = 8000): Promise<string> {
