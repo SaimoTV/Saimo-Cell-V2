@@ -634,6 +634,12 @@ class SaimoConnectService {
         this.lastActivity = Date.now();
         if (typeof msg.c0 === 'number') registrarPong(msg.c0);
         break;
+      case 'episodios': {
+        if (Array.isArray(msg.lista)) {
+          store.setEpisodiosTv({ temporada: Number(msg.temporada) || 0, lista: msg.lista });
+        }
+        break;
+      }
       case 'pos':
         if (Array.isArray(msg.screens)) registrarPosicoes(msg.screens);
         break;
@@ -802,6 +808,16 @@ class SaimoConnectService {
 
   trocarFonte(delta: number): void {
     this.sendCommand({ t: 'fonte', delta });
+  }
+
+  /** Pede à TV os episódios de uma temporada da série no ar (resposta: {t:'episodios'}). */
+  pedirEpisodios(temporada: number): void {
+    this.sendCommand({ t: 'episodios', temporada });
+  }
+
+  /** Troca a série no ar para outro episódio. */
+  escolherEpisodio(temporada: number, episodio: number): void {
+    this.sendCommand({ t: 'episodio', temporada, episodio });
   }
 
   requestSync(): void {

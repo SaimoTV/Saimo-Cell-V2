@@ -22,6 +22,14 @@ export interface TvScreen {
   liveOffset?: number; // em milissegundos
 }
 
+export interface EpisodioTv {
+  numero: number;
+  titulo?: string;
+  /** 0 a 1: quanto já foi visto. */
+  visto?: number;
+  noAr?: boolean;
+}
+
 export interface TvState {
   mode: 'idle' | 'live' | 'vod' | 'radio';
   screen?: 'home' | 'live' | 'vod' | 'radio' | 'search' | 'settings' | 'guide' | 'idle';
@@ -38,6 +46,11 @@ export interface TvState {
     pos: number;
     dur: number;
     key: string;
+    /** Série: temporada e episódio no ar e as temporadas que existem (TV Box). */
+    serie?: boolean;
+    temporada?: number;
+    episodio?: number;
+    temporadas?: number[];
   };
   volume: number;
   muted: boolean;
@@ -84,6 +97,9 @@ interface ConnectStoreState {
   pendingPin: string | null;
   /** Android 17 negou o acesso à rede local: a busca e a conexão não saem do celular. */
   semPermissaoRede: boolean;
+  /** Episódios de uma temporada da série no ar, pedidos à TV. */
+  episodiosTv: { temporada: number; lista: EpisodioTv[] } | null;
+  setEpisodiosTv: (e: { temporada: number; lista: EpisodioTv[] } | null) => void;
   /** TV recém-conectada esperando a resposta de "sincronizar?". */
   sincroniaPergunta: DiscoveredTv | null;
 
@@ -159,6 +175,8 @@ export const useConnectStore = create<ConnectStoreState>((set, get) => ({
   setPendingPin: (pendingPin) => set({ pendingPin }),
   setSemPermissaoRede: (semPermissaoRede) => set({ semPermissaoRede }),
   sincroniaPergunta: null,
+  episodiosTv: null,
+  setEpisodiosTv: (episodiosTv) => set({ episodiosTv }),
   setSincroniaPergunta: (sincroniaPergunta) => set({ sincroniaPergunta }),
 }));
 

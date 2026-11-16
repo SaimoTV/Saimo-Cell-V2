@@ -32,6 +32,9 @@ export default function ConnectRemote() {
   const [customText, setCustomText] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [showNumpad, setShowNumpad] = useState(false);
+  // Filme/série: a tela é a do filme; as setas só aparecem quando pedidas.
+  const emFilme = tvState?.mode === 'vod' && !!tvState?.vod;
+  const [setasNoFilme, setSetasNoFilme] = useState(false);
   const [typedDigits, setTypedDigits] = useState('');
   const [searchText, setSearchText] = useState('');
 
@@ -313,6 +316,8 @@ export default function ConnectRemote() {
                   </View>
                 ) : tvState?.mode === 'vod' && tvState.vod ? (
                   <ControleFilme
+                    setasAbertas={setasNoFilme}
+                    onSetas={() => setSetasNoFilme((v) => !v)}
                     onAbrirAudio={() => {
                       setVisible(false);
                       setMultiAudioVisible(true);
@@ -320,6 +325,7 @@ export default function ConnectRemote() {
                   />
                 ) : null}
 
+                {(!emFilme || setasNoFilme) && (<>
                 {/* 2. BARRA DE NAVEGAÇÃO PRINCIPAL (VOLTAR, HOME, MENU, ESCREVER) */}
                 <View style={styles.navBar}>
                   <TouchableOpacity style={styles.navBtn} onPress={() => handleKey('BACK')} activeOpacity={0.7}>
@@ -454,6 +460,9 @@ export default function ConnectRemote() {
                   </View>
                 </View>
 
+                </>)}
+
+                {!emFilme && (<>
                 {/* 5. BLOCO INFERIOR: VOLUME, FERRAMENTAS/123 E CANAL */}
                 <View style={styles.bottomCluster}>
                   {/* ROCKER VOLUME */}
@@ -535,6 +544,7 @@ export default function ConnectRemote() {
                     </TouchableOpacity>
                   </View>
                 </View>
+                </>)}
               </>
             )}
           </ScrollView>
