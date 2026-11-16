@@ -2,7 +2,7 @@
 
 import type { Channel, Program, CurrentProgram } from '../types';
 import { Paths, File as FSFile, Directory } from 'expo-file-system';
-import { lerGuiaTxt } from './saimoSources';
+import { lerEpgCentral, lerGuiaTxt } from './saimoSources';
 import { parseGuia, tabelasVazias, type TabelasDoGuia } from '../utils/guia';
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -586,15 +586,66 @@ function parseGuiaDeTv(html: string, channelId: string): Program[] {
     });
 }
 
-/** Busca o guiadetv para os canais suportados que ficaram sem programação do feed. */
+type GradeCentral = Record<string, [number, number, string, string?][]>;
+let centralLido: { g: GradeCentral; m: GradeCentral } | null = null;
+let centralEm = 0;
+
+/** epg.json do endereço de canais (guia montado no servidor), guardado 1 h. */
+async function guiaCentral(): Promise<{ g: GradeCentral; m: GradeCentral } | null> {
+    if (centralLido && Date.now() - centralEm < 3_600_000) return centralLido;
+    try {
+        const texto = await lerEpgCentral();
+        const d = texto ? JSON.parse(texto) : null;
+        centralLido = d && d.g && d.m ? d : null;
+    } catch {
+        centralLido = null;
+    }
+    centralEm = Date.now();
+    return centralLido;
+}
+
+function programasDoCentral(lista: [number, number, string, string?][], channelId: string, sinopse: boolean): Program[] {
+    return lista.map(([ini, fim, title, extra]) => ({
+        id: `${channelId}-${ini * 1000}`,
+        title,
+        description: sinopse ? extra : undefined,
+        category: sinopse ? '' : extra ?? '',
+        startTime: new Date(ini * 1000),
+        endTime: new Date(fim * 1000),
+    }));
+}
+
+/**
+ * Canais sem programação do feed: primeiro o guia central (um arquivo só, já
+ * montado no servidor); o que faltar nele, página por página no guiadetv.
+ */
 async function fillGuiaDeTvGaps(): Promise<void> {
+    const central = await guiaCentral();
+    let algumPreenchido = false;
+    if (central) {
+        for (const [appId, name] of appChannelNames.entries()) {
+            if (getChannelEPG(appId).length > 0) continue;
+            const slug = slugDe(name);
+            const codigo = guia.meuguia.get(name);
+            const [synthId, lista, sinopse] = slug && central.g[slug]
+                ? [`gdt:${slug}`, central.g[slug], true]
+                : codigo && central.m[codigo] ? [`mg:${codigo}`, central.m[codigo], false] : [null, null, false];
+            if (!synthId || !lista?.length) continue;
+            if (!channelPrograms.has(synthId)) channelPrograms.set(synthId, programasDoCentral(lista, synthId, sinopse));
+            resolvedIds.set(appId, synthId);
+            algumPreenchido = true;
+        }
+    }
+
     const alvos = [...appChannelNames.entries()].filter(([appId, name]) => {
         if (getChannelEPG(appId).length > 0) return false;
         return Boolean(slugDe(name));
     });
-    if (!alvos.length) return;
+    if (!alvos.length) {
+        if (algumPreenchido) notifyUpdate();
+        return;
+    }
 
-    let algumPreenchido = false;
     await Promise.all(alvos.map(async ([appId, name]) => {
         const slug = slugDe(name);
         if (!slug) return;

@@ -151,6 +151,15 @@ async function textoFilmes(arquivo: string, nomeNoCache: string, force = false):
   return fetchText(`${base}${arquivo}`, nomeNoCache, force);
 }
 
+/**
+ * `epg.json`: o guia de programação já montado no servidor (11h e 18h), por slug
+ * do guiadetv (`g`) e código do meuguia (`m`): `[[inicio, fim, título, extra]]`
+ * em segundos. Vazio quando o endereço não publica o arquivo.
+ */
+export async function lerEpgCentral(force = false): Promise<string> {
+  return textoCanais('epg.json', 'epg.json', force).catch(() => '');
+}
+
 /** `guia.txt` (tabelas do guia de programação), servido pelo endereço dos canais. */
 export async function lerGuiaTxt(force = false): Promise<string> {
   return textoCanais('guia.txt', 'guia.txt', force);
