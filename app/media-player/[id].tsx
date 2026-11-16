@@ -32,6 +32,7 @@ import {
     resolverDinamica,
 } from '../../services/playerStrategies';
 import { getItemAPI } from '../../services/apiService';
+import LogoCarregando from '../../components/LogoCarregando';
 import * as telemetria from '../../services/telemetria';
 import { limparTorrent } from '../../modules/saimo-torrent';
 
@@ -398,7 +399,7 @@ export default function MediaPlayerScreen() {
         nextSeason?: string; nextEpisode?: string;
         sources?: string; nextSources?: string; sourceLabels?: string; nextSourceLabels?: string;
         offline?: string;
-        tmdb?: string; episode?: string;
+        tmdb?: string; episode?: string; logo?: string;
     }>();
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -1445,7 +1446,10 @@ export default function MediaPlayerScreen() {
             {/* Loading */}
             {isLoading && !hasError && (
                 <View style={styles.centerOverlay} pointerEvents="none">
-                    <ActivityIndicator size="large" color={Colors.primary} />
+                    <LogoCarregando
+                        source={routeParams.logo ? { uri: String(routeParams.logo) } : require('../../assets/images/saimo_tv_logo.png')}
+                        tamanho={132}
+                    />
                     {strategyIdx > 0 && (
                         <Text style={styles.loadingStrategy}>Tentativa {strategyIdx + 1}…</Text>
                     )}

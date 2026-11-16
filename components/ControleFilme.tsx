@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { MaterialIcons, Feather, Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
@@ -72,7 +72,11 @@ export default function ControleFilme({ onAbrirAudio }: { onAbrirAudio: () => vo
   return (
     <View style={styles.caixa}>
       <View style={styles.topo}>
-        <MaterialIcons name="movie" size={18} color={Colors.secondary} />
+        {vod.poster ? (
+          <Image source={{ uri: vod.poster }} style={styles.logo} resizeMode="contain" />
+        ) : (
+          <MaterialIcons name="movie" size={18} color={Colors.secondary} />
+        )}
         <View style={{ flex: 1, marginLeft: 8 }}>
           <Text style={styles.titulo} numberOfLines={1}>{vod.title}</Text>
           {!!vod.subtitle && <Text style={styles.sub} numberOfLines={1}>{vod.subtitle}</Text>}
@@ -141,6 +145,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   topo: { flexDirection: 'row', alignItems: 'center' },
+  logo: { width: 44, height: 44, borderRadius: 8 },
   titulo: { color: Colors.text, fontSize: 15, fontWeight: '700' },
   sub: { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
   barra: { width: '100%', height: 36, marginTop: 6 },
