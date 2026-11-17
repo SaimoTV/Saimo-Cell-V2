@@ -27,7 +27,9 @@ export default function RemoteFab() {
 
   // O FAB NUNCA aparece se estiver reproduzindo TV ou filme/série
   const isPlayerActive =
-    pathname.includes('/player') || pathname.includes('/media-player');
+    pathname.includes('/player') || pathname.includes('/media-player')
+    // O player em pé das novelinhas ocupa a tela: o botão cobriria o "próximo".
+    || /^\/novelinhas\/[^/]+/.test(pathname);
 
   // Limites da tela para não permitir que o botão saia da área visível
   const minX = 12;
