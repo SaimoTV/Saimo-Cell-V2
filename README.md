@@ -216,3 +216,15 @@ Testes: `node --test tests/*.test.cjs` (o do hash é `tests/amostra.test.cjs`).
 | `components/` | cartões, listas, player, escolha de fonte, atualizador |
 
 Histórico de mudanças em [CHANGELOG.md](CHANGELOG.md).
+
+## Perfis, Kids e controle parental (3.2.0)
+
+Contrato comum dos apps: `SaimoPlayer/docs/perfis.md`. Até 10 perfis, cada um com avatar (21, de
+`SaimoPlayer/docs/avatares`), os seus favoritos, onde parou e recentes; listas, fontes e ajustes valem
+para o aparelho todo. O perfil principal usa os dados de antes (ninguém perde nada ao atualizar).
+Com 2 ou mais perfis o app abre em "Quem está assistindo?". Perfil Kids: só filmes e séries com
+classificação até 12 anos (sem classificação, escondido), nada adulto, sem addons; sair dele,
+gerenciar perfis e abrir os Ajustes pedem um código de 4 dígitos (guardado como SHA-256). Controle
+parental visível no fim dos Ajustes, discreto: senha padrão 0000, trocável; no Kids nunca libera.
+
+Aqui: `services/perfis.ts` (estado e `armazenamentoDoPerfil` dos stores zustand, com a gravação pausada até o perfil certo carregar), `services/perfisStores.ts`, `app/perfis.tsx` (telas), filtro do Kids em `services/saimoSources.ts`; o PIN de fábrica antigo 1234 passa para 0000. A sincronia (`services/sincroniaDados.ts`) guarda os dados dos outros perfis numa cópia em memória lida do AsyncStorage.
