@@ -59,6 +59,18 @@ export interface TvState {
     name: string;
     src: '0' | '1' | 'both' | 'none';
   }>;
+  /** Saimo Connect 2 (TV Box 3.2.1+): o que dá para escolher pelo celular. */
+  versaoConnect?: number;
+  fontes?: Array<{ rotulo: string; detalhe?: string }>;
+  fonteAtual?: number;
+  faixas?: {
+    audio: Array<{ rotulo: string; ativa: boolean }>;
+    legendas: Array<{ rotulo: string; ativa: boolean }>;
+    semLegenda: boolean;
+  } | null;
+  favorito?: boolean | null;
+  /** Minutos que faltam no timer de desligar (0 = desligado). */
+  timer?: number;
 }
 
 export interface DiscoveredTv {

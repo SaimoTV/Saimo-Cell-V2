@@ -814,6 +814,32 @@ class SaimoConnectService {
   }
 
   /** Pede à TV os episódios de uma temporada da série no ar (resposta: {t:'episodios'}). */
+  // ---------- Saimo Connect 2 ----------
+
+  escolherFonte(indice: number): void {
+    this.sendCommand({ t: 'fonte', indice });
+  }
+
+  escolherFaixa(tipo: 'audio' | 'legenda', indice: number): void {
+    this.sendCommand({ t: 'faixa', tipo, indice });
+  }
+
+  alternarFavorito(): void {
+    this.sendCommand({ t: 'favorito' });
+  }
+
+  canalAnterior(): void {
+    this.sendCommand({ t: 'anterior' });
+  }
+
+  timerDeSono(min: number): void {
+    this.sendCommand({ t: 'timer', min });
+  }
+
+  abrirTela(tela: 'inicio' | 'aovivo' | 'ondemand' | 'eventos' | 'radios' | 'busca' | 'ajustes' | 'perfis'): void {
+    this.sendCommand({ t: 'abrir', tela });
+  }
+
   pedirEpisodios(temporada: number): void {
     this.sendCommand({ t: 'episodios', temporada });
   }

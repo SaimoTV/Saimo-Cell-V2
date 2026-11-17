@@ -16,6 +16,7 @@ import { Colors, Spacing, BorderRadius, Typography } from '../constants/Colors';
 import { useConnectStore } from '../stores/connectStore';
 import { saimoConnect } from '../services/saimoConnect';
 import ControleFilme from './ControleFilme';
+import ConnectExtras, { connectNovo } from './ConnectExtras';
 
 export default function ConnectRemote() {
   const visible = useConnectStore((s) => s.isRemoteVisible);
@@ -305,13 +306,15 @@ export default function ConnectRemote() {
                         </Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.npMiniPill}
-                        onPress={() => saimoConnect.trocarFonte(1)}
-                      >
-                        <Feather name="refresh-cw" size={13} color={Colors.textSecondary} />
-                        <Text style={styles.npMiniPillText}>Fonte</Text>
-                      </TouchableOpacity>
+                      {!connectNovo(tvState?.versaoConnect) && (
+                        <TouchableOpacity
+                          style={styles.npMiniPill}
+                          onPress={() => saimoConnect.trocarFonte(1)}
+                        >
+                          <Feather name="refresh-cw" size={13} color={Colors.textSecondary} />
+                          <Text style={styles.npMiniPillText}>Fonte</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 ) : tvState?.mode === 'vod' && tvState.vod ? (
@@ -324,6 +327,8 @@ export default function ConnectRemote() {
                     }}
                   />
                 ) : null}
+
+                <ConnectExtras />
 
                 {(!emFilme || setasNoFilme) && (<>
                 {/* 2. BARRA DE NAVEGAÇÃO PRINCIPAL (VOLTAR, HOME, MENU, ESCREVER) */}

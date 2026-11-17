@@ -176,11 +176,13 @@ export default function ControleFilme({ onAbrirAudio, setasAbertas, onSetas }: {
             onPress={() => saimoConnect.escolherEpisodio(proximo.temporada, proximo.episodio)}
           />
         )}
-        <Acao
-          icone={<Feather name="refresh-cw" size={18} color={Colors.textSecondary} />}
-          texto="Outra fonte"
-          onPress={() => saimoConnect.trocarFonte(1)}
-        />
+        {(tvState?.versaoConnect ?? 0) < 2 && (
+          <Acao
+            icone={<Feather name="refresh-cw" size={18} color={Colors.textSecondary} />}
+            texto="Outra fonte"
+            onPress={() => saimoConnect.trocarFonte(1)}
+          />
+        )}
         <Acao
           icone={<Ionicons name="headset" size={19} color={phoneAudioMode !== 'none' ? '#fff' : Colors.textSecondary} />}
           texto={phoneAudioMode !== 'none' ? 'No celular' : 'Ouvir aqui'}
