@@ -17,9 +17,9 @@ const TURQUESA = '#4FE3D0';
 type NomeIcone = React.ComponentProps<typeof MaterialIcons>['name'];
 
 const VANTAGENS: { icone: NomeIcone; titulo: string; texto: string }[] = [
-  { icone: 'block', titulo: 'Zero anúncios', texto: 'Nada interrompendo o que você assiste' },
-  { icone: 'bolt', titulo: 'Servidores rápidos', texto: 'Transmissão estável e em alta qualidade' },
-  { icone: 'favorite', titulo: 'Sem mensalidade', texto: 'Canais, filmes e séries para todo mundo' },
+  { icone: 'block', titulo: 'Zero anúncios', texto: 'Nada interrompendo o que você usa' },
+  { icone: 'autorenew', titulo: 'Atualizações constantes', texto: 'Melhorias e correções para o app e o site' },
+  { icone: 'favorite', titulo: 'Sem mensalidade', texto: 'O app é gratuito para todo mundo' },
 ];
 
 /**
@@ -53,12 +53,16 @@ export default function Apoie() {
         <Text style={styles.tagTexto}>Comunidade Saimo TV</Text>
       </View>
       <Text style={styles.titulo}>
-        Ajude a manter tudo <Text style={styles.destaque}>100% gratuito</Text>
+        Ajude a manter o Saimo TV <Text style={styles.destaque}>100% gratuito</Text>
       </Text>
-      <Text style={styles.sub}>Sem anúncios, sem mensalidade e livre para todo mundo.</Text>
+      <Text style={styles.sub}>Sem anúncios e sem mensalidade.</Text>
       <Text style={styles.historia}>
-        Manter servidores rápidos, a transmissão e as atualizações de todo dia custa dinheiro todo mês.
-        Quem puder ajudar com qualquer valor faz uma diferença enorme para o Saimo TV continuar no ar para todos.
+        O Saimo TV é um player: ele toca as listas e os links que você mesmo adiciona. O app e o site não trazem
+        nenhum canal, filme ou série dentro; o que você assiste vem das suas próprias listas.
+      </Text>
+      <Text style={styles.historia}>
+        O desenvolvimento, as atualizações e a hospedagem do site custam dinheiro todo mês. Quem puder ajudar com
+        qualquer valor faz uma diferença enorme para o Saimo TV continuar gratuito, atualizado e sem anúncios.
       </Text>
 
       <Pressable onPress={copiarPix} accessibilityRole="button" accessibilityLabel="Copiar Pix copia e cola">
