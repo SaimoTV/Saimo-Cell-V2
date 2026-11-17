@@ -458,7 +458,7 @@ function AjustesConteudo() {
                   <Ionicons name="key-outline" size={20} color={Colors.textSecondary} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.settingLabel}>Trocar a senha</Text>
-                    <Text style={styles.linkValor}>A senha inicial é 0000</Text>
+                    <Text style={styles.linkValor}>Troque a senha de fábrica por uma sua</Text>
                   </View>
                 </View>
               </TouchableOpacity>
