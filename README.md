@@ -86,7 +86,9 @@ nem o endereço.
   e tempo de jogo atualizam a cada minuto com a aba aberta, e tocar abre o canal
 - **Apoie na abertura** (`services/apoieNaVersao.ts`): a tela Apoie o Saimo TV abre
   sozinha quando a abertura termina, uma vez por versão (primeiro uso e depois de
-  cada atualização); a versão vista fica guardada e não repete
+  cada atualização); a versão vista fica guardada e não repete. A doação é por
+  **Pix direto** (QR code e botão "Copiar Pix copia e cola", via `expo-clipboard`),
+  sem intermediário e sem página externa
 - **Filmes e séries** do acervo compartilhado (`vod/` do SaimoPlayer), com
   ficha, episódios, atores e escolha de fonte
 - **Fonte mantida na série**: ao passar de episódio (automático, Próximo ou outro da

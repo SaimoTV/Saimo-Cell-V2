@@ -10,7 +10,7 @@ const CHAVE = 'apoieVistoNaVersao';
  * pergunta, e já marca como vista (fechar o app no meio não repete).
  */
 export async function deveMostrarApoie(): Promise<boolean> {
-  // No iOS a doação por link externo (Pix/cripto) não passa na revisão da App Store.
+  // No iOS a doação (Pix) não passa na revisão da App Store.
   if (Platform.OS === 'ios') return false;
   const versao = Constants.expoConfig?.version ?? Constants.nativeApplicationVersion ?? '0.0.0';
   try {
