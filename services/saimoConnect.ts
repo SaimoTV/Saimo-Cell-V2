@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useConnectStore, initConnectStore, DiscoveredTv, TvState, PhoneAudioMode } from '../stores/connectStore';
 import { registrarPong, registrarPosicoes, limparSincronia } from './sincroniaTv';
 import { pacoteDeDados, aplicarDados } from './sincroniaDados';
+import { assinarPerfis } from './perfis';
 import { algumaLigada, escolhaDaTv, guardarEscolha, NADA, type EscolhaSincronia } from './connectSincronia';
 import { useLinksStore } from '../stores/linksStore';
 import { aoMudar as aoMudarListas, getListas } from './minhasListas';
@@ -213,8 +214,10 @@ class SaimoConnectService {
       if (getListas().length !== quantas) { quantas = getListas().length; this.agendarDados(1000); }
     });
     const e = aoMudarAddons(() => { this.agendarDados(1000); });
+    // Perfil criado, editado ou apagado: a TV fica com os mesmos perfis.
+    const g = assinarPerfis(() => { this.agendarDados(1000); });
     const f = aoMudarDebrid(() => { this.agendarDados(1000); });
-    this.pararDeVigiarDados = () => { a(); b(); c(); d(); e(); f(); clearTimeout(this.envioDeDados); };
+    this.pararDeVigiarDados = () => { a(); b(); c(); d(); e(); f(); g(); clearTimeout(this.envioDeDados); };
   }
   private initialized = false;
   // PIN já reenviado neste socket: evita laço se a TV recusar o código.

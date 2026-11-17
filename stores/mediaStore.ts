@@ -1,7 +1,7 @@
 // Store de mídia (filmes/séries) com Zustand
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { armazenamentoDoPerfil } from '../services/perfis';
 import type { MediaFilterType, MediaSortType, SeriesProgress } from '../types';
 
 interface MediaFavorite {
@@ -171,7 +171,9 @@ export const useMediaStore = create<MediaState>()(
         }),
         {
             name: 'saimo-media-store',
-            storage: createJSONStorage(() => AsyncStorage),
+            // De cada perfil (ver favoritesStore e services/perfisStores.ts).
+            storage: createJSONStorage(() => armazenamentoDoPerfil),
+            skipHydration: true,
             partialize: (state) => ({
                 favorites: state.favorites,
                 watchHistory: state.watchHistory,

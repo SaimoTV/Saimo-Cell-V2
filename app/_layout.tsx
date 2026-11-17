@@ -26,6 +26,11 @@ import { saimoConnect } from '../services/saimoConnect';
 import { carregarAddons, instalarAddon, normalizarUrlAddon } from '../services/addons';
 import { carregarDebridConfig } from '../services/debrid';
 import { deveMostrarApoie } from '../services/apoieNaVersao';
+import { prepararPerfis } from '../services/perfisStores';
+import { deveEscolherAoAbrir } from '../services/perfis';
+
+// Antes de qualquer tela: favoritos e progresso são do perfil ativo.
+void prepararPerfis();
 import { useConnectStore } from '../stores/connectStore';
 
 // O monitor conta a abertura já na subida do bundle, antes da primeira tela.
@@ -170,6 +175,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="perfis" options={{ animation: 'fade', presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen 
           name="player/[id]" 
           options={{
@@ -180,8 +186,13 @@ export default function RootLayout() {
       </Stack>
       {/* Por cima de tudo, só na partida a frio: o app monta por baixo. */}
       <Abertura aoSair={() => {
-        // Primeiro uso e cada versão nova: abre o Apoie por cima, uma vez.
-        deveMostrarApoie().then((sim) => { if (sim) router.push('/apoie' as any); });
+        void (async () => {
+          // Com 2 ou mais perfis, pergunta quem está assistindo.
+          await prepararPerfis();
+          if (deveEscolherAoAbrir()) router.push('/perfis?obrigatoria=1' as any);
+          // Primeiro uso e cada versão nova: abre o Apoie por cima, uma vez.
+          else if (await deveMostrarApoie()) router.push('/apoie' as any);
+        })();
       }} />
     </SafeAreaProvider>
   );

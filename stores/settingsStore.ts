@@ -2,8 +2,11 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { NativeModules, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { kidsAtivo } from '../services/perfis';
 
-const DEFAULT_PIN = '1234';
+// Senha do controle parental: 0000 em todos os apps (até a 3.1 o celular vinha com 1234).
+const DEFAULT_PIN = '0000';
+const PIN_ANTIGO_DE_FABRICA = '1234';
 
 export type UpscalingMode = 'off' | 'hd' | '4k';
 export type ZeroDelayMode = 'off' | 'equilibrado' | 'agressivo';
@@ -83,10 +86,13 @@ export const useSettingsStore = create<SettingsStore>()(
             },
 
             verifyPin: (pin: string) => {
+                // No perfil Kids o conteúdo adulto nunca destranca, nem com a senha.
+                if (kidsAtivo()) return false;
                 return get().adultPin === pin;
             },
 
             unlockAdult: () => {
+                if (kidsAtivo()) return;
                 set({ adultUnlocked: true });
             },
 
@@ -145,6 +151,8 @@ export const useSettingsStore = create<SettingsStore>()(
                 showEPG: state.showEPG,
             }),
             onRehydrateStorage: () => (state) => {
+                // Quem nunca trocou a senha estava com a de fábrica antiga: passa para 0000.
+                if (state && state.adultPin === PIN_ANTIGO_DE_FABRICA) state.adultPin = DEFAULT_PIN;
                 if (state?.upscaling) {
                     syncNativeUpscaling(state.upscaling);
                 }

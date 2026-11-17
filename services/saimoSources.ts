@@ -1,3 +1,4 @@
+import { kidsAtivo } from './perfis';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Paths, File as FSFile, Directory } from 'expo-file-system';
 
@@ -593,7 +594,7 @@ function semEntidades(texto: string): string {
 }
 
 /** Animes e doramas publicados com os episódios no próprio arquivo. */
-export async function loadVodCollection(
+async function loadVodCollectionBruto(
   kind: 'animes' | 'doramas',
   force = false,
 ): Promise<MediaItem[]> {
@@ -647,7 +648,7 @@ export async function loadVodCollection(
   }));
 }
 
-export async function loadVodCategory(
+async function loadVodCategoryBruto(
   type: 'movie' | 'series',
   letter: string,
   force = false,
@@ -714,7 +715,7 @@ export async function enrichVodItem(item: MediaItem): Promise<MediaItem> {
   return { ...item, tmdb: { ...basicTmdb(item.name, item.tmdb?.year), ...item.tmdb, ...meta } };
 }
 
-export async function getVodItem(id: string): Promise<MediaItem> {
+async function getVodItemBruto(id: string): Promise<MediaItem> {
   const parsed = parseVodId(id);
   if (!parsed) throw new Error('Identificador VOD inválido');
   if (parsed.letter === 'redeflix-animes' || parsed.letter === 'redeflix-doramas') {
@@ -768,7 +769,7 @@ async function loadSearchIndex(): Promise<VodSearchEntry[]> {
  * só os primeiros títulos em ordem alfabética entravam, e o elenco de quase
  * todo mundo aparecia vazio.
  */
-export async function searchVod(query: string, type?: 'movie' | 'series', limite = 500): Promise<MediaItem[]> {
+async function searchVodBruto(query: string, type?: 'movie' | 'series', limite = 500): Promise<MediaItem[]> {
   const wanted = normalise(query);
   const index = await loadSearchIndex();
   return index
@@ -840,7 +841,7 @@ export interface DestaqueRow {
   items: MediaItem[];
 }
 
-export async function loadDestaques(force = false): Promise<DestaqueRow[]> {
+async function loadDestaquesBruto(force = false): Promise<DestaqueRow[]> {
   const text = await textoFilmes('destaques.txt', 'vod-destaques.txt', force);
   const rows: DestaqueRow[] = [];
   let current: DestaqueRow | null = null;
@@ -1061,4 +1062,49 @@ export function detalheDe(item: MediaItem): DetalheDoTitulo | undefined {
   if (!v || !detalhesEmMemoria) return undefined;
   const k = v.type === 'series' ? 's|' : 'm|';
   return detalhesEmMemoria.get(k + v.title) || detalhesEmMemoria.get(k + v.title.replace(/\s*\(\d{4}\)\s*$/, ''));
+}
+
+// ---------- Perfil Kids: o filtro mora aqui, na leitura (contrato em SaimoPlayer/docs/perfis.md) ----------
+// Só títulos com classificação conhecida de Livre a 12 anos; sem classificação, escondido.
+
+export const IDADE_MAXIMA_KIDS = 12;
+
+export function liberadoNoKids(item: MediaItem): boolean {
+  if (!kidsAtivo()) return true;
+  const d = detalheDe(item);
+  return !!d && d.idade >= 0 && d.idade <= IDADE_MAXIMA_KIDS;
+}
+
+async function soDoKids(itens: MediaItem[]): Promise<MediaItem[]> {
+  if (!kidsAtivo()) return itens;
+  await carregarDetalhes();
+  return itens.filter(liberadoNoKids);
+}
+
+export async function loadVodCollection(kind: 'animes' | 'doramas', force = false): Promise<MediaItem[]> {
+  return soDoKids(await loadVodCollectionBruto(kind, force));
+}
+
+export async function loadVodCategory(type: 'movie' | 'series', letter: string, force = false): Promise<MediaItem[]> {
+  return soDoKids(await loadVodCategoryBruto(type, letter, force));
+}
+
+export async function searchVod(query: string, type?: 'movie' | 'series', limite = 500): Promise<MediaItem[]> {
+  return soDoKids(await searchVodBruto(query, type, limite));
+}
+
+export async function loadDestaques(force = false): Promise<DestaqueRow[]> {
+  const filas = await loadDestaquesBruto(force);
+  if (!kidsAtivo()) return filas;
+  await carregarDetalhes();
+  return filas.map((f) => ({ ...f, items: f.items.filter(liberadoNoKids) })).filter((f) => f.items.length > 0);
+}
+
+export async function getVodItem(id: string): Promise<MediaItem> {
+  const item = await getVodItemBruto(id);
+  if (kidsAtivo()) {
+    await carregarDetalhes();
+    if (!liberadoNoKids(item)) throw new Error('Este título não está disponível no perfil Kids.');
+  }
+  return item;
 }

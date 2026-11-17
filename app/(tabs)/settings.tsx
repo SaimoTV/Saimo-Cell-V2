@@ -28,8 +28,32 @@ import PinModal from '../../components/PinModal';
 import MinhasListas from '../../components/MinhasListas';
 import ListasModal from '../../components/ListasModal';
 import { verificarAtualizacaoAgora } from '../../services/atualizacao';
+import { useFocusEffect } from 'expo-router';
+import { assinarPerfis, ativo, kidsAtivo, pedeCodigo, perfis as listaPerfis } from '../../services/perfis';
+import { AvatarPerfil, PedirCodigo } from '../perfis';
 
+/** No perfil Kids os Ajustes pedem o código: a criança não mexe nas listas nem nos ajustes. */
 export default function SettingsScreen() {
+  const insets = useSafeAreaInsets();
+  const [liberado, setLiberado] = useState(false);
+  const [, setVersao] = useState(0);
+  React.useEffect(() => assinarPerfis(() => setVersao((v) => v + 1)), []);
+  // Saiu da aba: tranca de novo.
+  useFocusEffect(useCallback(() => () => setLiberado(false), []));
+  const perfil = ativo();
+  if (!pedeCodigo(perfil) || liberado) return <AjustesConteudo />;
+  return (
+    <View style={{ flex: 1, backgroundColor: '#0B0F2A', paddingTop: insets.top + 40 }}>
+      <PedirCodigo perfil={perfil} motivo="Os Ajustes ficam trancados no perfil Kids. Digite o código para abrir."
+        aoConfirmar={() => setLiberado(true)} aoCancelar={() => router.push('/perfis' as any)} />
+      <Text style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 8, fontSize: 13 }}>
+        Cancelar abre a troca de perfil.
+      </Text>
+    </View>
+  );
+}
+
+function AjustesConteudo() {
   const insets = useSafeAreaInsets();
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinMode, setPinMode] = useState<'verify' | 'change'>('change');
@@ -97,7 +121,7 @@ export default function SettingsScreen() {
       if (tapTimer.current) clearTimeout(tapTimer.current);
       if (adultUnlocked) {
         lockAdult();
-        Alert.alert('🔒 Bloqueado', 'Conteúdo adulto bloqueado.');
+        Alert.alert('Bloqueado', 'Conteúdo adulto bloqueado.');
       } else {
         setPinAction('unlock');
         setPinMode('verify');
@@ -202,6 +226,29 @@ export default function SettingsScreen() {
           </LinearGradient>
         </TouchableOpacity>
         )}
+
+        {/* Perfis */}
+        <Text style={styles.sectionTitle}>Perfis</Text>
+        <View style={styles.section}>
+          <TouchableOpacity style={styles.settingRow} onPress={() => router.push('/perfis' as any)} testID="ajustes-perfis">
+            <View style={styles.settingInfo}>
+              <AvatarPerfil perfil={ativo()} tamanho={36} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.settingLabel}>{ativo().nome}{ativo().kids ? ' (Kids)' : ''}</Text>
+                <Text style={styles.linkValor}>{listaPerfis().length === 1 ? 'Único perfil · toque para trocar ou criar' : `${listaPerfis().length} perfis · toque para trocar`}</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <TouchableOpacity style={styles.settingRow} onPress={() => router.push('/perfis?modo=gerenciar' as any)} testID="ajustes-perfis-gerenciar">
+            <View style={styles.settingInfo}>
+              <Ionicons name="people-outline" size={22} color={Colors.primary} />
+              <Text style={styles.settingLabel}>Gerenciar perfis, avatares e Kids</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
         {/* Listas */}
         <Text style={styles.sectionTitle}>Listas</Text>
@@ -390,6 +437,34 @@ export default function SettingsScreen() {
               : <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />}
           </TouchableOpacity>
         </View>
+
+        {/* Controle parental: no fim, separado e discreto. No Kids não aparece. */}
+        {!kidsAtivo() && (
+          <View style={{ opacity: 0.7, marginTop: 18 }}>
+            <Text style={styles.sectionTitle}>Controle parental</Text>
+            <View style={styles.section}>
+              <TouchableOpacity style={styles.settingRow} onPress={adultUnlocked ? handleLockAdult : handleUnlockAdult} testID="ajustes-parental">
+                <View style={styles.settingInfo}>
+                  <Ionicons name={adultUnlocked ? 'lock-open-outline' : 'lock-closed-outline'} size={20} color={Colors.textSecondary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingLabel}>Conteúdo adulto</Text>
+                    <Text style={styles.linkValor}>{adultUnlocked ? 'Liberado · toque para bloquear' : 'Bloqueado · toque para liberar com a senha'}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity style={styles.settingRow} onPress={() => { setPinAction('change'); setPinMode('change'); setPinModalVisible(true); }} testID="ajustes-parental-senha">
+                <View style={styles.settingInfo}>
+                  <Ionicons name="key-outline" size={20} color={Colors.textSecondary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingLabel}>Trocar a senha</Text>
+                    <Text style={styles.linkValor}>A senha inicial é 0000</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* App Info */}
         <View style={styles.appInfo}>

@@ -29,6 +29,7 @@ import {
 } from './addonsCore';
 
 export * from './addonsCore';
+import { kidsAtivo } from './perfis';
 
 export const CHAVE_STORAGE_ADDONS = 'saimo_addons_v1';
 const PRAZO_REDE_MS = 12_000;
@@ -152,12 +153,13 @@ export function getAddons(): InstalledAddon[] {
   return listaAddons;
 }
 
+// Perfil Kids: addons não têm classificação indicativa, então ficam desligados lá.
 export function getAddonsAtivos(): InstalledAddon[] {
-  return listaAddons.filter((a) => a.enabled);
+  return kidsAtivo() ? [] : listaAddons.filter((a) => a.enabled);
 }
 
 export function temAddonAtivo(): boolean {
-  return listaAddons.some((a) => a.enabled);
+  return !kidsAtivo() && listaAddons.some((a) => a.enabled);
 }
 
 /**

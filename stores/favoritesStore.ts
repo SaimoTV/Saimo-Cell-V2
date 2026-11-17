@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { armazenamentoDoPerfil } from '../services/perfis';
 
 interface FavoritesStore {
     favorites: string[];
@@ -57,7 +57,10 @@ export const useFavoritesStore = create<FavoritesStore>()(
         }),
         {
             name: 'saimo-favorites',
-            storage: createJSONStorage(() => AsyncStorage),
+            // De cada perfil: grava em saimo-favorites@<id> (o principal na chave de sempre) e
+            // só carrega depois de iniciarPerfis() saber o perfil ativo (ver services/perfisStores.ts).
+            storage: createJSONStorage(() => armazenamentoDoPerfil),
+            skipHydration: true,
             // Convert Set to array for persistence
             partialize: (state) => ({
                 favorites: state.favorites,
