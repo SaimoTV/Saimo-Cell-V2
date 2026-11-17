@@ -159,7 +159,7 @@ export default function SettingsScreen() {
   const handleClearMediaCache = useCallback(() => {
     Alert.alert(
       'Limpar Cache de Mídia',
-      'Deseja limpar o cache de filmes e séries? Os dados serão recarregados da internet.',
+      'Deseja limpar o cache da sua lista de filmes e séries? Ela será carregada de novo do endereço que você informou.',
       [
         { text: 'Cancelar', style: 'cancel' },
         { 

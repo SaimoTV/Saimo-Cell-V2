@@ -555,7 +555,7 @@ export default function MoviesScreen() {
       <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
         <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
         <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Carregando catálogo...</Text>
+        <Text style={styles.loadingText}>Carregando a sua lista...</Text>
       </View>
     );
   }
@@ -598,7 +598,7 @@ export default function MoviesScreen() {
             <Ionicons name="search" size={20} color={Colors.textSecondary} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Buscar filmes e séries..."
+              placeholder="Buscar na sua lista..."
               placeholderTextColor={Colors.textSecondary}
               value={searchInput}
               onChangeText={handleSearchChange}

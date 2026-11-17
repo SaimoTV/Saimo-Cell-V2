@@ -4,7 +4,7 @@
   Saimo TV: <a href="https://github.com/gabrielsaimo/SaimoTV-Android">TV Box</a> · <b>Celular</b> · <a href="https://github.com/gabrielsaimo/SaimoWin">Windows</a> · <a href="https://github.com/gabrielsaimo/SaimoPlayer">Mac e catálogo</a> · <a href="https://github.com/gabrielsaimo/Saimo-TV">Site</a> · <a href="https://github.com/gabrielsaimo">todos os apps</a>
 </p>
 
-Canais ao vivo, guia de programação, filmes e séries no celular. Versão atual:
+Player, no celular, das listas e dos links que você mesmo adiciona (ao vivo com guia de programação, filmes e séries da sua lista). Versão atual:
 **2.1.4**. Expo SDK 57, React Native 0.86, React 19.2, react-native-video.
 
 Listas: o app **não traz lista nenhuma**, nem endereço de lista (nem canais, nem
@@ -89,7 +89,7 @@ nem o endereço.
   cada atualização); a versão vista fica guardada e não repete. A doação é por
   **Pix direto** (QR code e botão "Copiar Pix copia e cola", via `expo-clipboard`),
   sem intermediário e sem página externa
-- **Filmes e séries** do acervo compartilhado (`vod/` do SaimoPlayer), com
+- **Filmes e séries** das listas que a pessoa adiciona (formato do Saimo, `vod/` do SaimoPlayer), com
   ficha, episódios, atores e escolha de fonte
 - **Fonte mantida na série**: ao passar de episódio (automático, Próximo ou outro da
   série), prefere a fonte que estava tocando, sem trocar entre dublado e legendado — mesmo
@@ -102,8 +102,8 @@ nem o endereço.
   próximo episódio quando os créditos começam
 - **Filtros na aba de filmes** (botão de ajustes no alto): Todos, Filmes,
   Séries, Animes e Doramas; ano, idade (classificação indicativa), nota mínima e
-  ordem (populares, mais bem avaliados, mais novos, A a Z), sobre o acervo
-  inteiro. Dados do `detalhes.txt` do catálogo (`carregarDetalhes` em
+  ordem (populares, mais bem avaliados, mais novos, A a Z), sobre a lista
+  inteira. Dados do `detalhes.txt` do catálogo (`carregarDetalhes` em
   `services/saimoSources.ts`); a lista filtrada fica guardada entre as páginas e
   só a resposta do último filtro escolhido entra na tela.
 - **Continuar assistindo** na aba de filmes, e um banner do primeiro destaque

@@ -109,7 +109,7 @@ export default function ActorScreen() {
           />
           <Text style={styles.actorName}>{actor?.name || name || 'Ator'}</Text>
           <Text style={styles.filmCount}>
-            {filmography.length} título{filmography.length !== 1 ? 's' : ''} no catálogo
+            {filmography.length} título{filmography.length !== 1 ? 's' : ''} na sua lista
           </Text>
         </View>
         
@@ -118,7 +118,7 @@ export default function ActorScreen() {
           <Text style={styles.sectionTitle}>Filmografia</Text>
           {filmography.length === 0 ? (
             <>
-              <Text style={styles.vazio}>Nada desta pessoa no acervo.</Text>
+              <Text style={styles.vazio}>Nada desta pessoa na sua lista.</Text>
               <Text style={styles.vazioNota}>
                 A filmografia mostra só o que dá para abrir daqui.
               </Text>
