@@ -119,6 +119,10 @@ nem o endereço.
   permissão `ACCESS_LOCAL_NETWORK` (busca e IP manual falham calados). O Connect
   pede ao abrir/buscar e mostra "Permissão de rede local" com atalho para as
   configurações se for negada (`garantirPermissaoRede` em `services/saimoConnect.ts`).
+- **Saimo Connect 2** (`components/ConnectExtras.tsx`): no controle, botões para escolher
+  a fonte numa lista, o áudio e a legenda, favoritar o canal, voltar ao canal anterior,
+  ligar o timer de desligar a TV e abrir uma tela da TV (Início, Ao vivo, Filmes...). Só
+  aparece o que a TV anuncia em `recursos`; TV antiga fica com o botão "Fonte" de antes.
 - **Menu de navegação** (`components/BarraDeAbas.tsx`, ligado em `app/(tabs)/_layout.tsx`):
   cápsula flutuante no estilo Material 3, seis espaços iguais com o nome sempre
   visível e indicador em degradê (índigo → roxo) atrás do ícone ativo, que entra
