@@ -197,7 +197,7 @@ export interface MediaCategory {
     lastUpdated?: number;
 }
 
-export type MediaFilterType = 'all' | 'movie' | 'tv' | 'animes' | 'doramas';
+export type MediaFilterType = 'all' | 'movie' | 'tv' | 'animes' | 'doramas' | 'novelas' | 'kids';
 export type MediaSortType = 'rating' | 'year' | 'name' | 'popularity';
 
 // Série com episódios (tipo legado, usar MediaItem com episodes)

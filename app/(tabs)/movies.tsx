@@ -42,6 +42,7 @@ import type { MediaItem } from '../../types';
 import MediaRow from '../../components/MediaRow';
 import MediaCard from '../../components/MediaCard';
 import FilterBar from '../../components/FilterBar';
+import AbasDoAcervo from '../../components/AbasDoAcervo';
 import * as telemetria from '../../services/telemetria';
 import { getAllGenres, filterMedia, sortMedia } from '../../services/mediaService';
 import { plural } from '../../utils/plural';
@@ -300,8 +301,11 @@ export default function MoviesScreen() {
     if (activeFilter === 'movie') params.p_type = 'movie';
     else if (activeFilter === 'tv') params.p_type = 'series';
     if (activeGenre) { params.p_category = activeGenre; params.p_genero = activeGenre; }
-    // Animes e doramas: a coleção inteira, e os outros filtros por cima dela.
-    if (activeFilter === 'animes' || activeFilter === 'doramas') params.p_category = activeFilter;
+    // Animes, doramas, novelas e kids: a categoria inteira (coleção + acervo do
+    // categorias.txt), e os outros filtros por cima dela.
+    if (activeFilter === 'animes' || activeFilter === 'doramas' || activeFilter === 'novelas' || activeFilter === 'kids') {
+      params.p_category = activeFilter;
+    }
     if (anos) params.p_anos = anos;
     if (idade !== null) params.p_idade = idade;
     if (nota) params.p_nota = nota;
@@ -610,6 +614,8 @@ export default function MoviesScreen() {
           </View>
         )}
       </View>
+
+      {!!linkFilmes && <AbasDoAcervo ativa={activeFilter} aoEscolher={setFilter} />}
 
       {showFilters && (
         <FilterBar

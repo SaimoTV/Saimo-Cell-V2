@@ -58,6 +58,8 @@ const FILTER_OPTIONS: { value: MediaFilterType; label: string; icon: string }[] 
 const COLECOES: { value: MediaFilterType; label: string; icon: string }[] = [
   { value: 'animes', label: 'Animes', icon: 'sparkles' },
   { value: 'doramas', label: 'Doramas', icon: 'heart-circle' },
+  { value: 'novelas', label: 'Novelas', icon: 'rose' },
+  { value: 'kids', label: 'Kids', icon: 'happy' },
 ];
 
 // Nota e popularidade vêm de detalhes.txt (do TMDB); sem ele, só A-Z e Ano.

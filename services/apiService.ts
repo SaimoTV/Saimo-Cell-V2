@@ -15,6 +15,9 @@ import { baseFilmes } from './enderecos';
 import {
   clearSaimoSourceCache, getVodItem, loadVodCategory, loadVodIndex,
   loadVodCollection, parseVodId, searchVod, carregarDetalhes, detalheDe,
+  loadCategorias,
+  temCategoria,
+  type CategoriaVod,
 } from './saimoSources';
 import {
   buscarNoTMDB,
@@ -276,6 +279,36 @@ async function montarCatalogoSemLista(params: Parameters<typeof getCatalog>[0]):
   return items;
 }
 
+const CATEGORIA_DO_FILTRO: Record<string, CategoriaVod> = {
+  animes: 'anime',
+  doramas: 'dorama',
+  novelas: 'novela',
+  kids: 'kids',
+};
+
+/**
+ * Animes, doramas, novelas e kids: os títulos do acervo marcados no
+ * categorias.txt. Animes e doramas somam-se às coleções da RedeFlix, sem
+ * repetir o mesmo nome.
+ */
+async function acervoDaCategoria(filtro: string, categoria: CategoriaVod, tipo?: 'movie' | 'series'): Promise<MediaItem[]> {
+  const [mapa, acervo, colecao] = await Promise.all([
+    loadCategorias(),
+    searchVod('', tipo, Number.MAX_SAFE_INTEGER),
+    filtro === 'animes' || filtro === 'doramas' ? loadCategoryInternal(filtro).catch(() => [] as MediaItem[]) : Promise.resolve([] as MediaItem[]),
+  ]);
+  const nome = (t: string) => t.replace(/\s*\(\d{4}\)\s*$/, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const vistos = new Set(colecao.map((i) => nome(i.name)));
+  const doAcervo = acervo.filter((i) => {
+    if (!temCategoria(mapa, i.name, i.type === 'tv', categoria)) return false;
+    const n = `${i.type}|${nome(i.name)}`;
+    if (vistos.has(nome(i.name)) || vistos.has(n)) return false;
+    vistos.add(n);
+    return true;
+  });
+  return [...colecao, ...doAcervo];
+}
+
 async function montarCatalogo(params: Parameters<typeof getCatalog>[0]): Promise<MediaItem[]> {
   if (!(await baseFilmes())) {
     return montarCatalogoSemLista(params);
@@ -287,9 +320,10 @@ async function montarCatalogo(params: Parameters<typeof getCatalog>[0]): Promise
   // corte de 500 da busca): senão "até 12 anos" sairia só dos primeiros títulos.
   const limite = precisaDetalhes || !params.p_search?.trim() ? Number.MAX_SAFE_INTEGER : undefined;
   let items: MediaItem[];
+  const categoria = CATEGORIA_DO_FILTRO[params.p_category || ''];
   if (params.p_search?.trim()) items = await searchVod(params.p_search, params.p_type, limite);
-  else if (params.p_category === 'animes' || params.p_category === 'doramas'
-    || (params.p_category && categoryParts(params.p_category))) items = await loadCategoryInternal(params.p_category);
+  else if (categoria) items = await acervoDaCategoria(params.p_category!, categoria, params.p_type);
+  else if (params.p_category && categoryParts(params.p_category)) items = await loadCategoryInternal(params.p_category);
   else items = await searchVod('', params.p_type, limite);
 
   if (precisaDetalhes) await carregarDetalhes();

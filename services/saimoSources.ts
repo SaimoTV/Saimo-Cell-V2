@@ -160,6 +160,52 @@ export async function lerEpgCentral(force = false): Promise<string> {
   return textoCanais('epg.json', 'epg.json', force).catch(() => '');
 }
 
+/**
+ * `novelinhas.txt`: minisséries verticais da RedeFlix (720x1280, ~1 min por
+ * episódio). Linha `base:` e depois
+ * id, título, pasta, episódios, áudio (dub|leg), capa, gêneros, sinopse.
+ * Episódio N = base + pasta + "/episode-" + N com três dígitos + ".mp4".
+ */
+export interface Novelinha {
+  id: string;
+  titulo: string;
+  pasta: string;
+  episodios: number;
+  dublada: boolean;
+  capa: string;
+  generos: string[];
+  sinopse: string;
+}
+let novelinhasEmMemoria: { base: string; lista: Novelinha[] } | null = null;
+
+export async function loadNovelinhas(force = false): Promise<{ base: string; lista: Novelinha[] }> {
+  if (novelinhasEmMemoria && !force) return novelinhasEmMemoria;
+  let base = '';
+  const lista: Novelinha[] = [];
+  try {
+    const text = await textoFilmes('novelinhas.txt', 'vod-novelinhas.txt', force);
+    for (const line of text.split(/\r?\n/)) {
+      if (!line || line.startsWith('#')) continue;
+      if (line.startsWith('base:')) { base = line.slice(5).trim(); continue; }
+      const f = line.split('\t');
+      const episodios = Number(f[3]) || 0;
+      if (f.length < 6 || !episodios) continue;
+      lista.push({
+        id: f[0], titulo: f[1], pasta: f[2], episodios, dublada: f[4] === 'dub', capa: f[5],
+        generos: (f[6] || '').split(',').map((g) => g.trim()).filter(Boolean), sinopse: f[7] || '',
+      });
+    }
+  } catch (error) {
+    console.warn('[SaimoVOD] novelinhas.txt:', error);
+  }
+  if (base && lista.length) novelinhasEmMemoria = { base, lista };
+  return { base, lista };
+}
+
+export function urlNovelinha(base: string, n: Novelinha, ep: number): string {
+  return `${base}${n.pasta}/episode-${String(ep).padStart(3, '0')}.mp4`;
+}
+
 /** `guia.txt` (tabelas do guia de programação), servido pelo endereço dos canais. */
 export async function lerGuiaTxt(force = false): Promise<string> {
   return textoCanais('guia.txt', 'guia.txt', force);
@@ -758,6 +804,8 @@ export async function clearSaimoSourceCache(parte?: 'canais' | 'filmes'): Promis
     vodIndex = null;
     searchIndex = null;
     fichasEmMemoria = null;
+    categoriasEmMemoria = null;
+    novelinhasEmMemoria = null;
     clearTMDBCache();
   }
   try {
@@ -829,7 +877,7 @@ export async function loadDestaques(force = false): Promise<DestaqueRow[]> {
       categoryLabel: current.title,
       type: type === 'series' ? 'tv' : 'movie',
       isAdult: false,
-      tmdb: { ...basicTmdb(title, year), poster: poster ? base + poster : '', trailer: trailer || undefined },
+      tmdb: { ...basicTmdb(title, year), poster: poster ? comBase(base, poster) : '', trailer: trailer || undefined },
     });
   }
   return rows.filter(row => row.items.length > 0);
@@ -870,7 +918,7 @@ export async function loadFichas(force = false): Promise<Fichas> {
       const fields = line.split('\t');
       if (fields.length < 5) continue;
       const key = `${fields[0]}|${fields[1]}`;
-      if (fields[3]) capas.set(key, base + fields[3]);
+      if (fields[3]) capas.set(key, comBase(base, fields[3]));
       const id = Number(fields[2]);
       if (Number.isFinite(id) && id > 0) {
         ids.set(key, id);
@@ -885,6 +933,44 @@ export async function loadFichas(force = false): Promise<Fichas> {
   }
   fichasEmMemoria = { ids, porId, capas };
   return fichasEmMemoria;
+}
+
+/** Pôster: caminho do TMDB depois da base, ou o endereço inteiro (capas de outras listas). */
+function comBase(base: string, poster: string): string {
+  return /^https?:\/\//i.test(poster) ? poster : base + poster;
+}
+
+/**
+ * Categoria de cada título do acervo (categorias.txt, gerado do país de
+ * origem e do idioma no TMDB): anime, dorama, novela, kids. Quem não está no
+ * arquivo é filme ou série comum.
+ */
+export type CategoriaVod = 'anime' | 'dorama' | 'novela' | 'kids';
+let categoriasEmMemoria: Map<string, CategoriaVod[]> | null = null;
+
+export async function loadCategorias(force = false): Promise<Map<string, CategoriaVod[]>> {
+  if (categoriasEmMemoria && !force) return categoriasEmMemoria;
+  const mapa = new Map<string, CategoriaVod[]>();
+  try {
+    const text = await textoFilmes('categorias.txt', 'vod-categorias.txt', force);
+    for (const line of text.split(/\r?\n/)) {
+      if (!line || line.startsWith('#')) continue;
+      const f = line.split('\t');
+      if (f.length < 3) continue;
+      const lista = f[2].split(',').map((x) => x.trim()).filter(Boolean) as CategoriaVod[];
+      if (lista.length) mapa.set(`${f[0]}|${f[1]}`, lista);
+    }
+  } catch (error) {
+    console.warn('[SaimoVOD] categorias.txt:', error);
+  }
+  if (mapa.size) categoriasEmMemoria = mapa;
+  return mapa;
+}
+
+export function temCategoria(mapa: Map<string, CategoriaVod[]>, titulo: string, serie: boolean, cat: CategoriaVod): boolean {
+  const k = serie ? 's|' : 'f|';
+  const lista = mapa.get(k + titulo) ?? mapa.get(k + semAnoNoFim(titulo));
+  return !!lista && lista.includes(cat);
 }
 
 function semAnoNoFim(titulo: string): string {
