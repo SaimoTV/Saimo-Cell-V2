@@ -61,6 +61,8 @@ export interface TvState {
   }>;
   /** Saimo Connect 2 (TV Box 3.2.1+): o que dá para escolher pelo celular. */
   versaoConnect?: number;
+  /** O que a TV sabe fazer: fontes, faixas, favorito, anterior, timer, telas. */
+  recursos?: string[];
   fontes?: Array<{ rotulo: string; detalhe?: string }>;
   fonteAtual?: number;
   faixas?: {

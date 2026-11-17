@@ -40,10 +40,14 @@ export default function ConnectExtras() {
   const aoVivo = tvState.mode === 'live';
   const tocando = aoVivo || tvState.mode === 'vod';
   const fontes = tocando ? tvState.fontes ?? [] : [];
+
   const fonteAtual = tvState.fonteAtual ?? 0;
   const faixas = tocando ? tvState.faixas : null;
   const favorito = aoVivo ? tvState.favorito : null;
   const timer = tvState.timer ?? 0;
+
+  const recursos = tvState.recursos ?? ['fontes', 'faixas', 'favorito', 'anterior', 'timer', 'telas'];
+  const tem = (r: string) => recursos.includes(r);
 
   const alternar = (p: Painel) => setAberto((a) => (a === p ? null : p));
 
@@ -53,7 +57,7 @@ export default function ConnectExtras() {
   return (
     <View style={styles.box}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {fontes.length > 1 && (
+        {tem('fontes') && fontes.length > 1 && (
           <Chip
             icone="layers"
             texto={`Fonte ${fonteAtual + 1} de ${fontes.length}`}
@@ -62,7 +66,7 @@ export default function ConnectExtras() {
             onPress={() => alternar('fontes')}
           />
         )}
-        {faixas && (
+        {tem('faixas') && faixas && (
           <Chip
             icone="subtitles"
             texto={legendaAtiva ? `Legenda: ${legendaAtiva.rotulo}` : audioAtivo ? audioAtivo.rotulo : 'Áudio e legenda'}
@@ -71,7 +75,7 @@ export default function ConnectExtras() {
             onPress={() => alternar('faixas')}
           />
         )}
-        {favorito !== null && favorito !== undefined && (
+        {tem('favorito') && favorito !== null && favorito !== undefined && (
           <Chip
             icone={favorito ? 'star' : 'star-border'}
             texto={favorito ? 'Favorito' : 'Favoritar'}
@@ -79,9 +83,10 @@ export default function ConnectExtras() {
             onPress={() => saimoConnect.alternarFavorito()}
           />
         )}
-        {aoVivo && (
+        {tem('anterior') && aoVivo && (
           <Chip icone="history" texto="Canal anterior" onPress={() => saimoConnect.canalAnterior()} />
         )}
+        {tem('timer') && (
         <Chip
           icone="bedtime"
           texto={timer > 0 ? `Desliga em ${timer} min` : 'Timer'}
@@ -90,7 +95,10 @@ export default function ConnectExtras() {
           seta
           onPress={() => alternar('timer')}
         />
-        <Chip icone="apps" texto="Ir para" ativo={aberto === 'telas'} seta onPress={() => alternar('telas')} />
+        )}
+        {tem('telas') && (
+          <Chip icone="apps" texto="Ir para" ativo={aberto === 'telas'} seta onPress={() => alternar('telas')} />
+        )}
       </ScrollView>
 
       {aberto === 'fontes' && fontes.length > 1 && (
