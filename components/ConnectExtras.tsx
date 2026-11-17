@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import { useConnectStore } from '../stores/connectStore';
@@ -56,7 +56,7 @@ export default function ConnectExtras() {
 
   return (
     <View style={styles.box}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+      <View style={styles.chips}>
         {tem('fontes') && fontes.length > 1 && (
           <Chip
             icone="layers"
@@ -99,7 +99,7 @@ export default function ConnectExtras() {
         {tem('telas') && (
           <Chip icone="apps" texto="Ir para" ativo={aberto === 'telas'} seta onPress={() => alternar('telas')} />
         )}
-      </ScrollView>
+      </View>
 
       {aberto === 'fontes' && fontes.length > 1 && (
         <View style={styles.lista}>
@@ -152,7 +152,7 @@ export default function ConnectExtras() {
                   setAberto(null);
                 }}
               >
-                <Text style={styles.tempoTexto}>{min < 60 ? `${min} min` : `${min / 60} h${min % 60 ? ' e meia' : ''}`}</Text>
+                <Text style={styles.tempoTexto}>{min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ' e meia' : ''}`}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -239,8 +239,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
-    paddingVertical: 2,
   },
   chip: {
     flexDirection: 'row',
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    maxWidth: 220,
+    maxWidth: '100%',
   },
   chipAtivo: {
     backgroundColor: Colors.primary,
