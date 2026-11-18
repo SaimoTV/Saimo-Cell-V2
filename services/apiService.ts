@@ -12,6 +12,12 @@ import {
   parseAnoReleaseInfo,
 } from './addons';
 import { baseFilmes } from './enderecos';
+import { temAcervoDeListas } from './saimoSources';
+
+/** Há filmes e séries: o endereço publicado ou o acervo de alguma lista do usuário. */
+async function temFilmes(): Promise<boolean> {
+  return !!(await baseFilmes()) || temAcervoDeListas();
+}
 import {
   clearSaimoSourceCache, getVodItem, loadVodCategory, loadVodIndex,
   loadVodCollection, parseVodId, searchVod, carregarDetalhes, detalheDe,
@@ -46,14 +52,16 @@ function categoryParts(categoryId: string): { type: 'movie' | 'series'; letter: 
 }
 
 async function allCategoryIds(): Promise<string[]> {
-  if (!(await baseFilmes())) return [];
+  if (!(await temFilmes())) return [];
   const index = await loadVodIndex();
-  return ['animes', 'doramas', ...index.entries.flatMap(entry => [`filmes-${entry.letter}`, `series-${entry.letter}`])];
+  // Animes e doramas são coleções do acervo publicado.
+  const colecoes = (await baseFilmes()) ? ['animes', 'doramas'] : [];
+  return [...colecoes, ...index.entries.flatMap(entry => [`filmes-${entry.letter}`, `series-${entry.letter}`])];
 }
 
 async function loadCategoryInternal(categoryId: string, force = false): Promise<MediaItem[]> {
   if (!force && CATEGORY_CACHE.has(categoryId)) return CATEGORY_CACHE.get(categoryId)!;
-  if (!(await baseFilmes())) return CATEGORY_CACHE.get(categoryId) ?? [];
+  if (!(await temFilmes())) return CATEGORY_CACHE.get(categoryId) ?? [];
   if (categoryId === 'animes' || categoryId === 'doramas') {
     const items = await loadVodCollection(categoryId, force);
     CATEGORY_CACHE.set(categoryId, items);
@@ -310,7 +318,7 @@ async function acervoDaCategoria(filtro: string, categoria: CategoriaVod, tipo?:
 }
 
 async function montarCatalogo(params: Parameters<typeof getCatalog>[0]): Promise<MediaItem[]> {
-  if (!(await baseFilmes())) {
+  if (!(await temFilmes())) {
     return montarCatalogoSemLista(params);
   }
 
@@ -372,7 +380,7 @@ export async function getItemAPI(id: string): Promise<MediaItem> {
 }
 
 export async function getCategories(): Promise<APICategories> {
-  if (!(await baseFilmes())) {
+  if (!(await temFilmes())) {
     const movies: { id: string; label: string; count: number }[] = [];
     const series: { id: string; label: string; count: number }[] = [];
     for (const [id, items] of CATEGORY_CACHE.entries()) {
@@ -399,7 +407,7 @@ export async function loadAllPreviews(limit = PREVIEW_SIZE): Promise<Map<string,
   if (CATEGORY_CACHE.size) return getAllLoadedCategories(limit);
   stopRequested = false;
 
-  if (!(await baseFilmes())) {
+  if (!(await temFilmes())) {
     await carregarAddons();
     if (getAddonsAtivos().length === 0) return new Map();
 

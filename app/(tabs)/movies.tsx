@@ -1,3 +1,5 @@
+import { temAcervoDeListas } from '../../services/saimoSources';
+import { aoMudar as aoMudarListas } from '../../services/minhasListas';
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { carregarDetalhes } from '../../services/saimoSources';
 import BotaoApoie from '../../components/BotaoApoie';
@@ -162,7 +164,11 @@ export default function MoviesScreen() {
   })));
   const { adultUnlocked } = useSettingsStore();
   const linksProntos = useLinksStore(s => s.pronto);
-  const linkFilmes = useLinksStore(s => s.linkFilmes);
+  const linkDoAcervo = useLinksStore(s => s.linkFilmes);
+  // Filmes e séries das listas do usuário (docs/listas-m3u.md) também contam.
+  const [acervoDeListas, setAcervoDeListas] = useState(temAcervoDeListas());
+  useEffect(() => aoMudarListas(() => setAcervoDeListas(temAcervoDeListas())), []);
+  const linkFilmes = linkDoAcervo || (acervoDeListas ? 'listas' : '');
   const [addonsProntos, setAddonsProntos] = useState(false);
   const [addonsChave, setAddonsChave] = useState('');
 

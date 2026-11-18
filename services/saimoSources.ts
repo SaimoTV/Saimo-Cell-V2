@@ -5,6 +5,42 @@ import { Paths, File as FSFile, Directory } from 'expo-file-system';
 import type { Channel, ChannelStream, MediaItem, TMDBData } from '../types';
 
 import { baseCanais, baseFilmes, exigirBaseCanais, exigirBaseFilmes, SemEnderecoError } from './enderecos';
+import * as FileSystemLegado from 'expo-file-system/legacy';
+import { acervosDasListas, aoMudar as aoMudarListas } from './minhasListas';
+import { letraDoTitulo, noDisco } from './acervoLista';
+
+// ---------- Acervos das listas do usuário (docs/listas-m3u.md) ----------
+// Cada lista com filmes e séries tem um acervo no formato Saimo numa pasta do
+// aparelho; aqui ele é lido junto do acervo publicado.
+
+async function textoDaLista(pasta: string, arquivo: string): Promise<string | null> {
+  try {
+    return await FileSystemLegado.readAsStringAsync(pasta + noDisco(arquivo));
+  } catch {
+    return null;
+  }
+}
+
+async function textosDasListas(arquivo: string): Promise<{ pasta: string; texto: string }[]> {
+  const saida: { pasta: string; texto: string }[] = [];
+  for (const pasta of acervosDasListas()) {
+    const texto = await textoDaLista(pasta, arquivo);
+    if (texto) saida.push({ pasta, texto });
+  }
+  return saida;
+}
+
+/** Há filmes e séries vindos das listas do usuário? */
+export function temAcervoDeListas(): boolean {
+  return acervosDasListas().length > 0;
+}
+
+// Lista adicionada, atualizada ou removida: o que está na memória é de antes.
+aoMudarListas(() => {
+  vodIndex = null;
+  searchIndex = null;
+  fichasEmMemoria = null;
+});
 
 const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 ' +
@@ -480,9 +516,26 @@ let vodIndex: VodIndex | null = null;
 
 export async function loadVodIndex(force = false): Promise<VodIndex> {
   if (vodIndex && !force) return vodIndex;
-  const text = await textoFilmes('indice.txt', 'vod-indice.txt', force);
-  const parsed = parseVodIndex(text);
-  if (!parsed.bases.length || !parsed.entries.length) throw new Error('Índice VOD inválido');
+  let parsed: VodIndex = { bases: [], entries: [] };
+  let erro: unknown = null;
+  try {
+    const text = await textoFilmes('indice.txt', 'vod-indice.txt', force);
+    parsed = parseVodIndex(text);
+    if (!parsed.bases.length || !parsed.entries.length) throw new Error('Índice VOD inválido');
+  } catch (e) {
+    erro = e;
+    parsed = { bases: [], entries: [] };
+  }
+  // As listas do usuário somam as contagens de cada letra.
+  for (const { texto } of await textosDasListas('indice.txt')) {
+    for (const e of parseVodIndex(texto).entries) {
+      const atual = parsed.entries.find(x => x.letter === e.letter);
+      if (atual) { atual.movies += e.movies; atual.series += e.series; }
+      else parsed.entries.push({ ...e, reserved: 0 });
+    }
+  }
+  if (!parsed.entries.length) throw erro ?? new Error('Índice VOD inválido');
+  parsed.entries.sort((a, b) => (a.letter === '#' ? -1 : b.letter === '#' ? 1 : a.letter < b.letter ? -1 : 1));
   vodIndex = parsed;
   return parsed;
 }
@@ -656,8 +709,29 @@ async function loadVodCategoryBruto(
   const index = await loadVodIndex(force);
   const safeLetter = letter === '#' ? '%23' : encodeURIComponent(letter);
   const file = `${type === 'movie' ? 'filmes' : 'series'}-${safeLetter}.txt`;
-  const text = await textoFilmes(file, `vod-${file}`, force);
-  return type === 'movie' ? movieItems(text, letter, index.bases) : seriesItems(text, letter);
+  let itens: MediaItem[] = [];
+  if (index.bases.length) {
+    try {
+      const text = await textoFilmes(file, `vod-${file}`, force);
+      itens = type === 'movie' ? movieItems(text, letter, index.bases) : seriesItems(text, letter);
+    } catch (e) {
+      if (!temAcervoDeListas()) throw e;
+    }
+  }
+  const nomeNaLista = `${type === 'movie' ? 'filmes' : 'series'}-${letter}.txt`;
+  for (const { pasta, texto } of await textosDasListas(nomeNaLista)) {
+    if (type === 'movie') {
+      for (const f of movieItems(texto, letter, [])) {
+        // O mesmo filme em outro acervo: as fontes dele viram reserva.
+        const igual = itens.find(x => x.name === f.name);
+        if (igual) igual.sources = [...(igual.sources ?? []), ...(f.sources ?? []).filter(s => !(igual.sources ?? []).some(x => x.url === s.url))];
+        else itens.push(f);
+      }
+    } else {
+      itens.push(...seriesItems(texto, letter).map(s => ({ ...s, vodOrigem: pasta })));
+    }
+  }
+  return itens;
 }
 
 async function loadSeriesEpisodes(item: MediaItem, letter: string): Promise<MediaItem> {
@@ -665,7 +739,9 @@ async function loadSeriesEpisodes(item: MediaItem, letter: string): Promise<Medi
   const safeLetter = letter === '#' ? '%23' : encodeURIComponent(letter);
   const chunk = item.vodChunk ?? 0;
   const file = `series-${safeLetter}-${chunk}.txt`;
-  const text = await textoFilmes(file, `vod-${file}`);
+  const text = item.vodOrigem
+    ? (await textoDaLista(item.vodOrigem, `series-${letter}-${chunk}.txt`)) ?? ''
+    : await textoFilmes(file, `vod-${file}`);
   const parsed = parseVodId(item.id);
   if (!parsed) return item;
 
@@ -753,7 +829,13 @@ function chaveDeBusca(entry: VodSearchEntry): string {
 
 async function loadSearchIndex(): Promise<VodSearchEntry[]> {
   if (searchIndex) return searchIndex;
-  const text = await textoFilmes('busca.txt', 'vod-busca.txt');
+  let text = '';
+  try {
+    text = await textoFilmes('busca.txt', 'vod-busca.txt');
+  } catch (e) {
+    if (!temAcervoDeListas()) throw e;
+  }
+  for (const { texto } of await textosDasListas('busca.txt')) text += '\n' + texto;
   searchIndex = text.split(/\r?\n/).flatMap(line => {
     const fields = line.split('\t');
     if (fields.length < 3 || !fields[0]) return [];
@@ -911,7 +993,10 @@ export async function loadFichas(force = false): Promise<Fichas> {
   const capas = new Map<string, string>();
   let base = '';
   try {
-    const text = await textoFilmes('fichas.txt', 'vod-fichas.txt', force);
+    let text = '';
+    try { text = await textoFilmes('fichas.txt', 'vod-fichas.txt', force); } catch (e) { if (!temAcervoDeListas()) throw e; }
+    // As capas e os grupos das listas do usuário (sem a linha capa:, os endereços são completos).
+    for (const { texto } of await textosDasListas('fichas.txt')) text += '\n' + texto.split('\n').filter(l => !l.startsWith('capa:')).join('\n');
     // tipo \t título \t id do TMDB \t pôster \t gêneros
     for (const line of text.split(/\r?\n/)) {
       if (!line || line.startsWith('#')) continue;
@@ -1093,8 +1178,59 @@ export async function searchVod(query: string, type?: 'movie' | 'series', limite
   return soDoKids(await searchVodBruto(query, type, limite));
 }
 
+/**
+ * Fileiras montadas do acervo das listas do usuário: os lançamentos (do ano
+ * passado para cá) e os grupos da lista com mais títulos, só com capa.
+ */
+async function destaquesDasListas(): Promise<DestaqueRow[]> {
+  const fichas = await textosDasListas('fichas.txt');
+  if (!fichas.length) return [];
+  const anos = new Map<string, string>();
+  for (const { texto } of await textosDasListas('busca.txt')) {
+    for (const l of texto.split('\n')) { const f = l.split('\t'); if (f.length >= 3) anos.set(`${f[1]}|${f[0]}`, f[3] ?? ''); }
+  }
+  const esteAno = new Date().getFullYear();
+  const lancamentos: MediaItem[] = [];
+  const porGrupo = new Map<string, MediaItem[]>();
+  for (const { texto } of fichas) {
+    for (const l of texto.split('\n')) {
+      const f = l.split('\t');
+      if (f.length < 5 || !f[3]) continue;
+      const serie = f[0] === 's';
+      const titulo = f[1];
+      const ano = anos.get(`${f[0]}|${titulo}`) ?? '';
+      const letra = letraDoTitulo(titulo);
+      const tipo: 'movie' | 'series' = serie ? 'series' : 'movie';
+      const item: MediaItem = {
+        id: makeVodId(tipo, letra, titulo, serie ? ano : ''),
+        name: titulo, url: '',
+        category: `${serie ? 'series' : 'filmes'}-${letra}`, categoryLabel: '',
+        type: serie ? 'tv' : 'movie', isAdult: false,
+        tmdb: { ...basicTmdb(titulo, ano), poster: f[3] },
+      };
+      if (!serie && Number(ano) >= esteAno - 1) lancamentos.push(item);
+      for (const g of f[4].split(',').filter(Boolean)) {
+        const lista = porGrupo.get(g) ?? [];
+        if (lista.length < 30) lista.push(item);
+        porGrupo.set(g, lista);
+      }
+    }
+  }
+  const filas: DestaqueRow[] = [];
+  if (lancamentos.length >= 4) filas.push({ title: 'Lançamentos', items: lancamentos.sort((a, b) => Number(b.tmdb?.year) - Number(a.tmdb?.year)).slice(0, 30) });
+  const grupos = [...porGrupo.entries()].filter(([, l]) => l.length >= 6).sort((a, b) => b[1].length - a[1].length).slice(0, 10);
+  for (const [g, itens] of grupos) filas.push({ title: g, items: itens });
+  return filas;
+}
+
 export async function loadDestaques(force = false): Promise<DestaqueRow[]> {
-  const filas = await loadDestaquesBruto(force);
+  let filas: DestaqueRow[] = [];
+  try {
+    filas = await loadDestaquesBruto(force);
+  } catch (e) {
+    if (!temAcervoDeListas()) throw e;
+  }
+  if (temAcervoDeListas()) filas = [...filas, ...(await destaquesDasListas())];
   if (!kidsAtivo()) return filas;
   await carregarDetalhes();
   return filas.map((f) => ({ ...f, items: f.items.filter(liberadoNoKids) })).filter((f) => f.items.length > 0);

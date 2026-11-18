@@ -188,6 +188,8 @@ export interface MediaItem {
     sources?: MediaSource[];
     /** Pedaço do catálogo remoto que contém os episódios da série. */
     vodChunk?: number;
+    /** De que acervo veio: vazio o publicado; a pasta do acervo de uma lista do usuário. */
+    vodOrigem?: string;
 }
 
 export interface MediaCategory {

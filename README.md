@@ -238,3 +238,12 @@ Aqui: `services/perfis.ts` (estado e `armazenamentoDoPerfil` dos stores zustand,
 `stores/brilhoStore.ts` + `components/VeuDeBrilho.tsx` (Ajustes > Tela): véu preto por cima do app,
 0 a 100. Em até 5% qualquer toque traz o brilho de volta, devagar. No Saimo Connect, o chip "Brilho"
 controla o brilho do app na TV e o timer fecha o app da TV.
+
+## Filmes e séries das listas
+
+`services/classificar.ts` + `services/acervoLista.ts` + `services/lerEmFluxo.ts`: cada item de uma
+lista M3U/Xtream é classificado em canal, filme ou episódio (`SaimoPlayer/docs/listas-m3u.md`,
+gabarito em `scripts/testes/`, teste `npx tsx scripts/testar-classificar.ts`). A lista é baixada
+direto para um arquivo e lida em pedaços de 1 MB (uma de 77 MB inteira na memória derrubava o
+app); o acervo da lista vai para `minhas_listas/<id>-acervo/` no formato Saimo e o
+`saimoSources` lê junto do publicado, com capas (`tvg-logo`) e fileiras por grupo.

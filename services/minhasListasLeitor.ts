@@ -1,3 +1,4 @@
+import { tipo, type Tipo } from './classificar';
 // Leitor de listas .m3u comuns ("Minhas listas"). Sem dependência do React
 // Native para poder ser testado em Node. Segue ESPEC_LISTAS_M3U.md e deve
 // gerar exatamente a mesma saída do leitor de referência.
@@ -28,8 +29,13 @@ export function chave(nome: string): string {
   return nome.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+const REGEX_DO_ATRIBUTO = new Map<string, RegExp>();
 function atributo(linha: string, nome: string): string | null {
-  const m = new RegExp('(?:^|[\\s:])' + nome.replace(/[-]/g, '\\-') + '="([^"]*)"').exec(linha);
+  // Sem o atributo na linha, nem passa pela expressão regular (caro no celular).
+  if (!linha.includes(nome + '="')) return null;
+  let r = REGEX_DO_ATRIBUTO.get(nome);
+  if (!r) { r = new RegExp('(?:^|[\\s:])' + nome.replace(/[-]/g, '\\-') + '="([^"]*)"'); REGEX_DO_ATRIBUTO.set(nome, r); }
+  const m = r.exec(linha);
   return m ? m[1].trim() : null;
 }
 
@@ -63,27 +69,62 @@ interface Pend {
   tvgId: string | null;
   logo: string | null;
   grupo: string | null;
+  /** tvg-type / type / media-type: o tipo que a lista declara. */
+  declarado: string | null;
 }
+
+/** Um filme ou episódio da lista (docs/listas-m3u.md): vai para o acervo da lista. */
+export interface ItemVod { tipo: Tipo; nome: string; grupo: string; url: string; logo: string | null }
 
 export function lerM3U(textoEntrada: string): CanalM3U[] {
   try {
-    return ler(textoEntrada);
+    return lerTudo(textoEntrada).canais;
   } catch {
     return [];
   }
 }
 
-function ler(textoEntrada: string): CanalM3U[] {
-  const texto = String(textoEntrada ?? '').replace(/^﻿+/, '');
+/** Os canais e, à parte, os filmes e episódios da lista. */
+export function lerTudo(textoEntrada: string): { canais: CanalM3U[]; vod: ItemVod[] } {
+  const vod: ItemVod[] = [];
+  const passos = ler(textoEntrada, vod);
+  let r = passos.next();
+  while (!r.done) r = passos.next();
+  return { canais: r.value, vod };
+}
+
+/**
+ * Igual a [lerTudo], mas cede a vez à tela a cada 4 mil linhas: uma lista de
+ * 300 mil itens travava o app por vários segundos.
+ */
+export async function lerTudoSemTravar(textoEntrada: string): Promise<{ canais: CanalM3U[]; vod: ItemVod[] }> {
+  const vod: ItemVod[] = [];
+  const passos = ler(textoEntrada, vod);
+  let r = passos.next();
+  while (!r.done) {
+    await new Promise<void>((ok) => setTimeout(ok, 0));
+    r = passos.next();
+  }
+  return { canais: r.value, vod };
+}
+
+/**
+ * O leitor linha a linha: [linha] para cada linha da lista, [fim] devolve os
+ * canais (os filmes e episódios vão para `vod`). Assim a lista pode vir em
+ * pedaços de um arquivo, sem caber inteira na memória.
+ */
+export function criarLeitor(vod: { push: (item: ItemVod) => void }): { linha: (bruta: string) => void; fim: () => CanalM3U[] } {
   const canais: CanalM3U[] = [];
   const indice = new Map<string, CanalM3U>();
   let pend: Pend | null = null;
   let opts: Record<string, string> = {};
-
-  for (const bruta of texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')) {
+  let primeira = true;
+  const linha = (entrada: string) => {
+    let bruta = entrada;
+    if (primeira) { bruta = bruta.replace(/^\ufeff+/, ''); primeira = false; }
     const linha = bruta.trim();
-    if (!linha) continue;
-    if (linha.toUpperCase().startsWith('#EXTM3U')) continue;
+    if (!linha) return;
+    if (linha.toUpperCase().startsWith('#EXTM3U')) return;
     if (linha.startsWith('#EXTINF')) {
       pend = {
         exibido: nomeExibido(linha),
@@ -91,11 +132,12 @@ function ler(textoEntrada: string): CanalM3U[] {
         tvgId: atributo(linha, 'tvg-id'),
         logo: atributo(linha, 'tvg-logo'),
         grupo: atributo(linha, 'group-title'),
+        declarado: atributo(linha, 'tvg-type') || atributo(linha, 'type') || atributo(linha, 'media-type'),
       };
       opts = {};
-      continue;
+      return;
     }
-    if (linha.startsWith('#EXTGRP:')) { opts.extgrp = linha.slice(8).trim(); continue; }
+    if (linha.startsWith('#EXTGRP:')) { opts.extgrp = linha.slice(8).trim(); return; }
     if (linha.startsWith('#EXTVLCOPT:')) {
       const kv = linha.slice(11);
       const i = kv.indexOf('=');
@@ -105,7 +147,7 @@ function ler(textoEntrada: string): CanalM3U[] {
         if (k === 'http-referrer' || k === 'http-referer') opts.referer = v;
         else if (k === 'http-user-agent') opts.ua = v;
       }
-      continue;
+      return;
     }
     if (linha.startsWith('#KODIPROP:')) {
       const kv = linha.slice(10);
@@ -116,9 +158,9 @@ function ler(textoEntrada: string): CanalM3U[] {
         if (k === 'inputstream.adaptive.license_type') opts.licTipo = v.toLowerCase();
         else if (k === 'inputstream.adaptive.license_key') opts.licChave = v;
       }
-      continue;
+      return;
     }
-    if (linha.startsWith('#')) continue;
+    if (linha.startsWith('#')) return;
 
     // Linha de endereço.
     let url = linha;
@@ -135,16 +177,24 @@ function ler(textoEntrada: string): CanalM3U[] {
         }
       }
     }
-    if (!HTTP.test(url)) { pend = null; opts = {}; continue; }
+    if (!HTTP.test(url)) { pend = null; opts = {}; return; }
 
-    const p: Pend = pend ?? { exibido: '', tvgName: null, tvgId: null, logo: null, grupo: null };
+    const p: Pend = pend ?? { exibido: '', tvgName: null, tvgId: null, logo: null, grupo: null, declarado: null };
     const bruto = p.exibido || p.tvgName || p.tvgId || '';
-    let [nome, qual] = bruto ? tirarTags(bruto) : ['', null];
-    if (!nome) nome = `Canal ${canais.length + 1}`;
     let grupo: string | null = p.grupo || opts.extgrp || null;
     if (grupo && grupo.includes(';')) grupo = grupo.split(';')[0].trim();
     grupo = grupo || null;
     const logo = p.logo && HTTP.test(p.logo) ? p.logo : null;
+    const t = tipo(url, bruto, grupo ?? '', p.declarado ?? '');
+    if (t.tipo !== 'canal') {
+      // Filme ou episódio: vai para o acervo da lista (adulto não entra).
+      if (!ehRestrito(bruto, grupo)) vod.push({ tipo: t, nome: bruto, grupo: grupo ?? '', url, logo });
+      pend = null;
+      opts = {};
+      return;
+    }
+    let [nome, qual] = bruto ? tirarTags(bruto) : ['', null];
+    if (!nome) nome = `Canal ${canais.length + 1}`;
     const fonte: FonteM3U = {
       url,
       referer: opts.referer || extra.referer || null,
@@ -171,8 +221,18 @@ function ler(textoEntrada: string): CanalM3U[] {
     }
     pend = null;
     opts = {};
+    };
+  return { linha, fim: () => canais };
+}
+
+function* ler(textoEntrada: string, vod: ItemVod[]): Generator<void, CanalM3U[], void> {
+  const leitor = criarLeitor(vod);
+  let n = 0;
+  for (const bruta of String(textoEntrada ?? '').split(/\r\n|\n|\r/)) {
+    if (++n % 4000 === 0) yield;
+    leitor.linha(bruta);
   }
-  return canais;
+  return leitor.fim();
 }
 
 /** A resposta parece uma lista .m3u? (começa com #EXTM3U ou tem algum #EXTINF) */
@@ -184,6 +244,9 @@ export function pareceM3U(texto: string): boolean {
 const RESTRITO = /(?:^|[^a-z0-9])(?:adult|adulto|adultos|xxx|porn|porno|sexo|sex|erotic|erotico|hentai)(?![a-z0-9])|\+18|18\+/;
 
 function simplificar(s: string): string {
+  // Só ASCII (quase sempre): sem normalizar, que é caro no celular.
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7f]*$/.test(s)) return s.toLowerCase();
   return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 }
 
