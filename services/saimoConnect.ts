@@ -832,6 +832,11 @@ class SaimoConnectService {
     this.sendCommand({ t: 'anterior' });
   }
 
+  /** Brilho do app na TV (0 a 100). Em 0 a tela fica preta; qualquer botão do controle volta. */
+  brilho(valor: number): void {
+    this.sendCommand({ t: 'brilho', valor: Math.max(0, Math.min(100, Math.round(valor))) });
+  }
+
   timerDeSono(min: number): void {
     this.sendCommand({ t: 'timer', min });
   }

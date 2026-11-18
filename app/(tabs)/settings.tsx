@@ -1,3 +1,5 @@
+import Slider from '@react-native-community/slider';
+import { useBrilhoStore } from '../../stores/brilhoStore';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -54,6 +56,8 @@ export default function SettingsScreen() {
 }
 
 function AjustesConteudo() {
+  const brilhoApp = useBrilhoStore((s) => s.brilho);
+  const definirBrilho = useBrilhoStore((s) => s.definir);
   const insets = useSafeAreaInsets();
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinMode, setPinMode] = useState<'verify' | 'change'>('change');
@@ -407,6 +411,34 @@ function AjustesConteudo() {
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
           </TouchableOpacity>
+        </View>
+
+        {/* Brilho do app (não o do aparelho): 0 escurece tudo; um toque volta. */}
+        <Text style={styles.sectionTitle}>Tela</Text>
+        <View style={styles.section}>
+          <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <View style={[styles.settingInfo, { justifyContent: 'space-between' }]}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="sunny-outline" size={22} color={Colors.primary} />
+                <Text style={styles.settingLabel}>Brilho do app</Text>
+              </View>
+              <Text style={styles.settingLabel}>{brilhoApp}%</Text>
+            </View>
+            <Slider
+              minimumValue={0}
+              maximumValue={100}
+              step={5}
+              value={brilhoApp}
+              onSlidingComplete={definirBrilho}
+              minimumTrackTintColor={Colors.primary}
+              maximumTrackTintColor="rgba(255,255,255,0.2)"
+              thumbTintColor="#fff"
+              testID="ajustes-brilho"
+            />
+            <Text style={{ color: Colors.textMuted, fontSize: 12 }}>
+              Em 0% a tela fica preta: toque em qualquer lugar para voltar ao normal.
+            </Text>
+          </View>
         </View>
 
         {/* Atualizações */}

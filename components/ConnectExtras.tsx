@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import { useConnectStore } from '../stores/connectStore';
@@ -12,7 +13,7 @@ import { saimoConnect } from '../services/saimoConnect';
  * antiga (sem versaoConnect) fica com os botões de sempre.
  */
 
-type Painel = 'fontes' | 'faixas' | 'timer' | 'telas' | null;
+type Painel = 'fontes' | 'faixas' | 'timer' | 'telas' | 'brilho' | null;
 
 const TEMPOS = [15, 30, 45, 60, 90, 120];
 
@@ -45,6 +46,7 @@ export default function ConnectExtras() {
   const faixas = tocando ? tvState.faixas : null;
   const favorito = aoVivo ? tvState.favorito : null;
   const timer = tvState.timer ?? 0;
+  const brilho = tvState.brilho ?? 100;
 
   const recursos = tvState.recursos ?? ['fontes', 'faixas', 'favorito', 'anterior', 'timer', 'telas'];
   const tem = (r: string) => recursos.includes(r);
@@ -89,12 +91,22 @@ export default function ConnectExtras() {
         {tem('timer') && (
         <Chip
           icone="bedtime"
-          texto={timer > 0 ? `Desliga em ${timer} min` : 'Timer'}
+          texto={timer > 0 ? `Fecha em ${timer} min` : 'Timer'}
           destaque={timer > 0}
           ativo={aberto === 'timer'}
           seta
           onPress={() => alternar('timer')}
         />
+        )}
+        {tem('brilho') && (
+          <Chip
+            icone="brightness-6"
+            texto={`Brilho ${brilho}%`}
+            destaque={brilho < 100}
+            ativo={aberto === 'brilho'}
+            seta
+            onPress={() => alternar('brilho')}
+          />
         )}
         {tem('telas') && (
           <Chip icone="apps" texto="Ir para" ativo={aberto === 'telas'} seta onPress={() => alternar('telas')} />
@@ -140,7 +152,7 @@ export default function ConnectExtras() {
 
       {aberto === 'timer' && (
         <View style={styles.lista}>
-          <Text style={styles.listaTitulo}>Desligar a TV em</Text>
+          <Text style={styles.listaTitulo}>Fechar o app da TV em</Text>
           <View style={styles.grade}>
             {TEMPOS.map((min) => (
               <TouchableOpacity
@@ -162,6 +174,31 @@ export default function ConnectExtras() {
               <Text style={styles.desligarTimerTexto}>Cancelar o timer ({timer} min)</Text>
             </TouchableOpacity>
           )}
+        </View>
+      )}
+
+      {aberto === 'brilho' && (
+        <View style={styles.lista}>
+          <Text style={styles.listaTitulo}>Brilho do app na TV</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={5}
+            value={brilho}
+            onSlidingComplete={(v) => saimoConnect.brilho(v)}
+            minimumTrackTintColor={Colors.primary}
+            maximumTrackTintColor="rgba(255,255,255,0.2)"
+            thumbTintColor="#fff"
+          />
+          <View style={styles.grade}>
+            {[0, 25, 50, 75, 100].map((v) => (
+              <TouchableOpacity key={v} style={[styles.tempo, v === brilho && { backgroundColor: Colors.primary }]}
+                activeOpacity={0.7} onPress={() => saimoConnect.brilho(v)}>
+                <Text style={styles.tempoTexto}>{v === 100 ? 'Normal' : `${v}%`}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.dica}>Em 0% a tela da TV fica preta. Qualquer botão do controle (ou Normal aqui) traz o brilho de volta.</Text>
         </View>
       )}
 
@@ -330,6 +367,11 @@ const styles = StyleSheet.create({
     color: Colors.errorLight,
     fontSize: 13,
     fontWeight: '600',
+  },
+  dica: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    marginTop: 10,
   },
   tela: {
     width: '23%',

@@ -71,8 +71,10 @@ export interface TvState {
     semLegenda: boolean;
   } | null;
   favorito?: boolean | null;
-  /** Minutos que faltam no timer de desligar (0 = desligado). */
+  /** Minutos que faltam no timer que fecha o app da TV (0 = desligado). */
   timer?: number;
+  /** Brilho do app na TV, 0 a 100 (100 = normal). */
+  brilho?: number;
 }
 
 export interface DiscoveredTv {

@@ -18,6 +18,7 @@ import ConnectRemote from '../components/ConnectRemote';
 import ConnectSincronia from '../components/ConnectSincronia';
 import MultiAudioPanel from '../components/MultiAudioPanel';
 import RemoteFab from '../components/RemoteFab';
+import VeuDeBrilho from '../components/VeuDeBrilho';
 import { downloadManager } from '../services/downloadManager';
 import { useDownloadStore } from '../stores/downloadStore';
 import { initNotifications } from '../services/downloadNotifications';
@@ -194,6 +195,7 @@ export default function RootLayout() {
           else if (await deveMostrarApoie()) router.push('/apoie' as any);
         })();
       }} />
+      <VeuDeBrilho />
     </SafeAreaProvider>
   );
 }
