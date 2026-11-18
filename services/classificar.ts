@@ -165,10 +165,14 @@ const anoDoFim = (nome: string) => { const t = nome.trimEnd(); return t.slice(t.
 
 export function tipo(url: string, nome: string, grupo: string, declarado: string): Tipo {
   const m = marca(nome);
+  const segs = caminho(url);
+  // Arquivo de vídeo (.mp4, .mkv, .avi...) nunca é canal, nem declarado "live".
+  const ultimo0 = segs[segs.length - 1] ?? '';
+  const p0 = ultimo0.lastIndexOf('.');
+  if (p0 >= 0 && VIDEO.has(ultimo0.slice(p0 + 1))) return m ? { tipo: 'episodio', marca: m } : { tipo: 'filme' };
   const d = declarado.trim().toLowerCase();
   if (TIPO_CANAL.has(d)) return { tipo: 'canal' };
   let acervo = TIPO_FILME.has(d) || TIPO_SERIE.has(d);
-  const segs = caminho(url);
   if (!acervo) {
     for (const s of segs.slice(0, -1)) {
       if (SEG_FILME.has(s) || SEG_SERIE.has(s)) { acervo = true; break; }
