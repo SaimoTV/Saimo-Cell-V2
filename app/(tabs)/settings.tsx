@@ -28,6 +28,7 @@ import { clearAllCaches } from '../../services/apiService';
 import { useLinksStore } from '../../stores/linksStore';
 import PinModal from '../../components/PinModal';
 import MinhasListas from '../../components/MinhasListas';
+import ContaSaimo from '../../components/ContaSaimo';
 import ListasModal from '../../components/ListasModal';
 import { verificarAtualizacaoAgora } from '../../services/atualizacao';
 import { useFocusEffect } from 'expo-router';
@@ -230,6 +231,12 @@ function AjustesConteudo() {
           </LinearGradient>
         </TouchableOpacity>
         )}
+
+        {/* Conta Saimo (opcional): sincronizar pela internet e entrar nas TVs pelo QR. */}
+        {!kidsAtivo() && (<>
+          <Text style={styles.sectionTitle}>Conta Saimo</Text>
+          <ContaSaimo />
+        </>)}
 
         {/* Perfis */}
         <Text style={styles.sectionTitle}>Perfis</Text>
