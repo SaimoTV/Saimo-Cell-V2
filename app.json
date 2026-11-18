@@ -27,8 +27,8 @@
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
         },
-        "NSPhotoLibraryAddUsageDescription": "Saimo TV salva seus downloads na Galeria para voc\u00ea assistir offline em outros apps.",
-        "NSPhotoLibraryUsageDescription": "Saimo TV organiza seus downloads em um \u00e1lbum na Galeria.",
+        "NSPhotoLibraryAddUsageDescription": "Saimo TV salva seus downloads na Galeria para você assistir offline em outros apps.",
+        "NSPhotoLibraryUsageDescription": "Saimo TV organiza seus downloads em um álbum na Galeria.",
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "O Saimo TV usa a rede local para encontrar a sua TV Box (Saimo Connect) e aparelhos com Chromecast.",
         "NSBonjourServices": [
@@ -125,6 +125,7 @@
         }
       ],
       "./plugins/withPictureInPicture",
+      "./plugins/withHardwareOpcional",
       [
         "expo-notifications",
         {
@@ -169,8 +170,8 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Saimo TV organiza seus downloads em um \u00e1lbum na Galeria.",
-          "savePhotosPermission": "Saimo TV salva seus downloads na Galeria para voc\u00ea assistir offline em outros apps.",
+          "photosPermission": "Saimo TV organiza seus downloads em um álbum na Galeria.",
+          "savePhotosPermission": "Saimo TV salva seus downloads na Galeria para você assistir offline em outros apps.",
           "isAccessMediaLocationEnabled": true
         }
       ],
