@@ -106,6 +106,20 @@ export async function definirSenha(email: string, codigo: string, senha: string)
   await sincronizar(true);
 }
 
+/** Criar a conta com e-mail e senha (o e-mail não é verificado: é só o login). */
+export async function cadastrar(email: string, senha: string): Promise<void> {
+  const j = await api('POST', '/v1/senha/cadastrar', { email: email.trim(), senha, aparelho: nomeDoAparelho() }, null);
+  mudar({ token: j.token, email: j.conta?.email ?? email.trim().toLowerCase(), erro: null });
+  ultimoEnviado = '';
+  await gravar();
+  await sincronizar(true);
+}
+
+/** Trocar a senha de quem está logado (os outros aparelhos saem da conta). */
+export async function trocarSenha(senhaAtual: string, senhaNova: string): Promise<void> {
+  await api('POST', '/v1/senha/trocar', { senhaAtual, senhaNova });
+}
+
 export async function sair(): Promise<void> {
   try { await api('POST', '/v1/sair'); } catch { /* sai daqui de qualquer jeito */ }
   mudar({ token: null, email: null, sincronizadaEm: 0, erro: null });
