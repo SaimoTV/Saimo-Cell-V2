@@ -247,3 +247,7 @@ gabarito em `scripts/testes/`, teste `npx tsx scripts/testar-classificar.ts`). A
 direto para um arquivo e lida em pedaços de 1 MB (uma de 77 MB inteira na memória derrubava o
 app); o acervo da lista vai para `minhas_listas/<id>-acervo/` no formato Saimo e o
 `saimoSources` lê junto do publicado, com capas (`tvg-logo`) e fileiras por grupo.
+
+## Conta Saimo (opcional)
+
+Ajustes > Conta Saimo: entrar com o código do e-mail ou com e-mail e senha, criar e trocar a senha, aprovar uma TV pelo código do QR (`saimo://conectar?c=` abre direto) e apagar a conta. Código em `services/conta.ts` e `components/ContaSaimo.tsx`; sincroniza pelo pacote do Connect (`services/sincroniaDados.ts`). Teste: `EXPO_PUBLIC_CONTA_API=http://10.0.2.2:8787` no build (o build de produção não leva a variável). Contrato: SaimoPlayer/docs/conta.md. Sem conta, nada muda.
