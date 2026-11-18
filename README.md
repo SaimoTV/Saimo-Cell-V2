@@ -232,3 +232,9 @@ gerenciar perfis e abrir os Ajustes pedem um código de 4 dígitos (guardado com
 parental visível no fim dos Ajustes, discreto: senha padrão 0000, trocável; no Kids nunca libera.
 
 Aqui: `services/perfis.ts` (estado e `armazenamentoDoPerfil` dos stores zustand, com a gravação pausada até o perfil certo carregar), `services/perfisStores.ts`, `app/perfis.tsx` (telas), filtro do Kids em `services/saimoSources.ts`; o PIN de fábrica antigo 1234 passa para 0000. A sincronia (`services/sincroniaDados.ts`) guarda os dados dos outros perfis numa cópia em memória lida do AsyncStorage.
+
+## Brilho do app
+
+`stores/brilhoStore.ts` + `components/VeuDeBrilho.tsx` (Ajustes > Tela): véu preto por cima do app,
+0 a 100. Em até 5% qualquer toque traz o brilho de volta, devagar. No Saimo Connect, o chip "Brilho"
+controla o brilho do app na TV e o timer fecha o app da TV.
