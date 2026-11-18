@@ -85,6 +85,27 @@ export async function entrarComCodigo(email: string, codigo: string): Promise<vo
   await sincronizar(true);
 }
 
+/** Entrar com e-mail e senha (para quem criou uma). */
+export async function entrarComSenha(email: string, senha: string): Promise<void> {
+  const j = await api('POST', '/v1/senha/entrar', { email: email.trim(), senha, aparelho: nomeDoAparelho() }, null);
+  mudar({ token: j.token, email: j.conta?.email ?? email.trim().toLowerCase(), erro: null });
+  ultimoEnviado = '';
+  await gravar();
+  await sincronizar(true);
+}
+
+/**
+ * Criar a conta com senha, pôr uma senha na conta ou trocar a esquecida, com o
+ * código que chegou no e-mail (pedirCodigo antes). Trocar encerra as outras sessões.
+ */
+export async function definirSenha(email: string, codigo: string, senha: string): Promise<void> {
+  const j = await api('POST', '/v1/senha/definir', { email: email.trim(), codigo, senha, aparelho: nomeDoAparelho() }, null);
+  mudar({ token: j.token, email: j.conta?.email ?? email.trim().toLowerCase(), erro: null });
+  ultimoEnviado = '';
+  await gravar();
+  await sincronizar(true);
+}
+
 export async function sair(): Promise<void> {
   try { await api('POST', '/v1/sair'); } catch { /* sai daqui de qualquer jeito */ }
   mudar({ token: null, email: null, sincronizadaEm: 0, erro: null });

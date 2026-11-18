@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius } from '../constants/Colors';
 import {
-  aoMudarConta, apagarConta, aprovarTv, codigoDoQr, entrarComCodigo, estadoConta, pedirCodigo, sair, sincronizar,
+  aoMudarConta, apagarConta, aprovarTv, codigoDoQr, definirSenha, entrarComCodigo, entrarComSenha, estadoConta, pedirCodigo, sair,
+  sincronizar,
 } from '../services/conta';
 
 function haQuanto(ms: number): string {
@@ -15,19 +16,124 @@ function haQuanto(ms: number): string {
   return h < 24 ? `sincronizado há ${h} h` : `sincronizado há ${Math.floor(h / 24)} d`;
 }
 
+type Modo = 'email' | 'senha' | 'codigo' | 'definir';
+
 /**
- * Ajustes > Conta Saimo (opcional). Sem conta: entrar com o e-mail (código de 6
- * números). Com conta: sincroniza perfis, onde parou, favoritos, listas e
- * addons, e entra numa TV pelo código do QR. `codigoTv` vem do link do QR.
+ * Entrar: com a senha (quem criou uma) ou com o código de 6 números que chega
+ * no e-mail. Criar ou trocar a senha também passa pelo código (prova que o
+ * e-mail é de quem pede). `emailFixo`: já logado, só criando ou trocando a senha.
+ */
+function Entrar({ emailFixo, aoTerminar }: { emailFixo?: string; aoTerminar?: () => void }) {
+  const [modo, setModo] = useState<Modo>(emailFixo ? 'definir' : 'email');
+  const [email, setEmail] = useState(emailFixo ?? '');
+  const [senha, setSenha] = useState('');
+  const [codigo, setCodigo] = useState('');
+  const [codigoPedido, setCodigoPedido] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const [aviso, setAviso] = useState('');
+
+  const tentar = async (f: () => Promise<void>) => {
+    setOcupado(true);
+    setAviso('');
+    try { await f(); } catch (e) { setAviso(e instanceof Error ? e.message : 'Não deu certo'); } finally { setOcupado(false); }
+  };
+  const mandarCodigo = () => tentar(async () => {
+    try {
+      const r = await pedirCodigo(email);
+      if (r.codigoDev) setCodigo(r.codigoDev); // só no servidor de teste
+    } catch (e) {
+      // Pediu há menos de 1 minuto: o código que já chegou continua valendo (10 min).
+      if (!(e instanceof Error && /minuto/.test(e.message))) throw e;
+    }
+    setCodigoPedido(true);
+  });
+  const emailOk = email.includes('@');
+  const voltar = () => { setModo('email'); setSenha(''); setCodigo(''); setCodigoPedido(false); setAviso(''); };
+  const botao = (rotulo: string, onPress: () => void, desligado: boolean, testID: string, secundario = false) => (
+    <TouchableOpacity style={[styles.botao, secundario && styles.botaoSecundario]} disabled={desligado} onPress={onPress} testID={testID}>
+      {ocupado && !secundario ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoTexto}>{rotulo}</Text>}
+    </TouchableOpacity>
+  );
+
+  return (
+    <View testID={emailFixo ? 'conta-senha-logado' : 'conta-sem-login'}>
+      {modo === 'email' && (
+        <>
+          <Text style={styles.texto}>
+            Opcional: entre para guardar perfis, onde parou, favoritos, listas e addons na sua conta e ter tudo em qualquer
+            aparelho, até fora de casa. Sem conta, tudo continua só neste aparelho.
+          </Text>
+          <TextInput style={styles.campo} placeholder="Seu e-mail" placeholderTextColor={Colors.textMuted} autoCapitalize="none"
+            keyboardType="email-address" autoComplete="email" value={email} onChangeText={setEmail} testID="conta-email" />
+          {botao('Entrar com senha', () => setModo('senha'), !emailOk, 'conta-com-senha')}
+          {botao('Receber código por e-mail', () => { setModo('codigo'); void mandarCodigo(); }, ocupado || !emailOk, 'conta-enviar-codigo', true)}
+        </>
+      )}
+
+      {modo === 'senha' && (
+        <>
+          <Text style={styles.texto}>{email.trim()}</Text>
+          <TextInput style={styles.campo} placeholder="Senha" placeholderTextColor={Colors.textMuted} secureTextEntry
+            autoComplete="password" autoCapitalize="none" value={senha} onChangeText={setSenha} testID="conta-senha" />
+          {botao('Entrar', () => void tentar(() => entrarComSenha(email, senha)), ocupado || !senha, 'conta-entrar-senha')}
+          <TouchableOpacity onPress={() => { setModo('definir'); setSenha(''); void mandarCodigo(); }} testID="conta-esqueci">
+            <Text style={styles.link}>Esqueci a senha / criar senha</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={voltar}><Text style={styles.link}>Usar outro e-mail</Text></TouchableOpacity>
+        </>
+      )}
+
+      {modo === 'codigo' && (
+        <>
+          <Text style={styles.texto}>{codigoPedido ? `Digite o código de 6 números que chegou em ${email.trim()}.` : 'Enviando o código…'}</Text>
+          <TextInput style={[styles.campo, styles.campoCodigo]} placeholder="000000" placeholderTextColor={Colors.textMuted}
+            keyboardType="number-pad" maxLength={6} value={codigo} onChangeText={setCodigo} testID="conta-codigo" />
+          {botao('Entrar', () => void tentar(() => entrarComCodigo(email, codigo)), ocupado || codigo.length !== 6, 'conta-entrar')}
+          <TouchableOpacity onPress={voltar}><Text style={styles.link}>Usar outro e-mail</Text></TouchableOpacity>
+        </>
+      )}
+
+      {modo === 'definir' && (
+        <>
+          <Text style={styles.texto}>
+            {codigoPedido ? `Chegou um código de 6 números em ${email.trim()}. Digite o código e a senha nova (pelo menos 8 caracteres).`
+              : emailFixo ? `Para criar ou trocar a senha, mandamos um código para ${email.trim()}.` : 'Enviando o código…'}
+          </Text>
+          {emailFixo && !codigoPedido ? (
+            botao('Mandar o código', () => void mandarCodigo(), ocupado, 'conta-pedir-codigo-senha')
+          ) : (
+            <>
+              <TextInput style={[styles.campo, styles.campoCodigo]} placeholder="000000" placeholderTextColor={Colors.textMuted}
+                keyboardType="number-pad" maxLength={6} value={codigo} onChangeText={setCodigo} testID="conta-codigo-senha" />
+              <TextInput style={styles.campo} placeholder="Senha nova" placeholderTextColor={Colors.textMuted} secureTextEntry
+                autoComplete="password-new" autoCapitalize="none" value={senha} onChangeText={setSenha} testID="conta-senha-nova" />
+              {botao('Salvar senha e entrar', () => void tentar(async () => { await definirSenha(email, codigo, senha); aoTerminar?.(); }),
+                ocupado || codigo.length !== 6 || senha.length < 8, 'conta-salvar-senha')}
+            </>
+          )}
+          {emailFixo && (
+            <Text style={styles.texto}>Trocar uma senha que já existia tira a conta dos outros aparelhos (entram de novo com a senha nova ou o QR).</Text>
+          )}
+          <TouchableOpacity onPress={aoTerminar ?? voltar}><Text style={styles.link}>{aoTerminar ? 'Cancelar' : 'Voltar'}</Text></TouchableOpacity>
+        </>
+      )}
+
+      {!!aviso && <Text style={styles.erro}>{aviso}</Text>}
+    </View>
+  );
+}
+
+/**
+ * Ajustes > Conta Saimo (opcional). Sem conta: entrar com e-mail e senha ou com
+ * o código do e-mail. Com conta: sincroniza perfis, onde parou, favoritos,
+ * listas e addons, e entra numa TV pelo código do QR. `codigoTv` vem do link do QR.
  */
 export default function ContaSaimo({ codigoTv }: { codigoTv?: string }) {
   const [conta, setConta] = useState(estadoConta());
-  const [email, setEmail] = useState('');
-  const [codigo, setCodigo] = useState('');
-  const [esperandoCodigo, setEsperandoCodigo] = useState(false);
   const [tv, setTv] = useState(codigoTv ?? '');
   const [ocupado, setOcupado] = useState(false);
   const [aviso, setAviso] = useState('');
+  const [mexendoNaSenha, setMexendoNaSenha] = useState(false);
 
   useEffect(() => aoMudarConta(setConta), []);
   useEffect(() => { if (codigoTv) setTv(codigoTv); }, [codigoTv]);
@@ -39,42 +145,7 @@ export default function ContaSaimo({ codigoTv }: { codigoTv?: string }) {
   };
 
   if (!conta.token) {
-    return (
-      <View style={styles.caixa} testID="conta-sem-login">
-        <Text style={styles.texto}>
-          Opcional: entre com o seu e-mail para guardar perfis, onde parou, favoritos, listas e addons na sua conta e
-          ter tudo em qualquer aparelho, até fora de casa. Sem conta, tudo continua só neste aparelho.
-        </Text>
-        {!esperandoCodigo ? (
-          <>
-            <TextInput style={styles.campo} placeholder="Seu e-mail" placeholderTextColor={Colors.textMuted} autoCapitalize="none"
-              keyboardType="email-address" autoComplete="email" value={email} onChangeText={setEmail} testID="conta-email" />
-            <TouchableOpacity style={styles.botao} disabled={ocupado || !email.includes('@')} testID="conta-enviar-codigo"
-              onPress={() => tentar(async () => {
-                const r = await pedirCodigo(email);
-                setEsperandoCodigo(true);
-                if (r.codigoDev) setCodigo(r.codigoDev); // só no servidor de teste
-              })}>
-              {ocupado ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoTexto}>Receber código por e-mail</Text>}
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <Text style={styles.texto}>Digite o código de 6 números que chegou em {email.trim()}.</Text>
-            <TextInput style={[styles.campo, styles.campoCodigo]} placeholder="000000" placeholderTextColor={Colors.textMuted}
-              keyboardType="number-pad" maxLength={6} value={codigo} onChangeText={setCodigo} testID="conta-codigo" />
-            <TouchableOpacity style={styles.botao} disabled={ocupado || codigo.length !== 6} testID="conta-entrar"
-              onPress={() => tentar(() => entrarComCodigo(email, codigo))}>
-              {ocupado ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoTexto}>Entrar</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setEsperandoCodigo(false); setCodigo(''); }}>
-              <Text style={styles.link}>Usar outro e-mail</Text>
-            </TouchableOpacity>
-          </>
-        )}
-        {!!aviso && <Text style={styles.erro}>{aviso}</Text>}
-      </View>
-    );
+    return <View style={styles.caixa}><Entrar /></View>;
   }
 
   return (
@@ -89,6 +160,14 @@ export default function ContaSaimo({ codigoTv }: { codigoTv?: string }) {
           <Ionicons name="sync" size={22} color={Colors.textSecondary} />
         </TouchableOpacity>
       </View>
+
+      {mexendoNaSenha && conta.email ? (
+        <View style={{ marginTop: 10 }}><Entrar emailFixo={conta.email} aoTerminar={() => setMexendoNaSenha(false)} /></View>
+      ) : !!conta.email && (
+        <TouchableOpacity onPress={() => setMexendoNaSenha(true)} testID="conta-criar-senha">
+          <Text style={styles.link}>Criar ou trocar a senha</Text>
+        </TouchableOpacity>
+      )}
 
       <Text style={[styles.titulo, { marginTop: 14 }]}>Entrar numa TV</Text>
       <Text style={styles.texto}>Na TV, abra Ajustes &gt; Conta Saimo e leia o QR com a câmera, ou digite aqui o código que aparece nela.</Text>
@@ -131,6 +210,7 @@ const styles = StyleSheet.create({
   },
   campoCodigo: { letterSpacing: 4, textAlign: 'center', fontSize: 20, fontWeight: '700' },
   botao: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, paddingVertical: 13, alignItems: 'center', marginTop: 10 },
+  botaoSecundario: { backgroundColor: Colors.surfaceVariant },
   botaoTexto: { color: '#fff', fontSize: 15, fontWeight: '700' },
   link: { color: Colors.primaryLight, fontSize: 14, fontWeight: '600', marginTop: 10 },
   erro: { color: Colors.errorLight, fontSize: 13, marginTop: 8 },
