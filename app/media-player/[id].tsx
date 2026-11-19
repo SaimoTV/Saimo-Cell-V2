@@ -20,6 +20,7 @@ import { useRemoteMediaClient } from 'react-native-google-cast';
 import { Colors, Spacing, BorderRadius } from '../../constants/Colors';
 import { useShallow } from 'zustand/react/shallow';
 import { useMediaStore } from '../../stores/mediaStore';
+import { chaveEpisodio, chaveFilme, useAparenciaStore, useExtrasStore } from '../../stores/extrasStore';
 import { useSettingsStore, type UpscalingMode } from '../../stores/settingsStore';
 import CastAction from '../../components/CastAction';
 import { useDownloadStore } from '../../stores/downloadStore';
@@ -659,6 +660,28 @@ export default function MediaPlayerScreen() {
     // segundo) e o intervalo de 5 s nunca chegava a disparar: o progresso só
     // era gravado ao sair, e um app fechado à força perdia onde parou.
     const temDuracao = duration > 0;
+
+    // Concluído (estatísticas e ✓ dos episódios): passou de 90%.
+    // Tamanho e posição da legenda (Ajustes > Legendas).
+    const legendaEscolhida = useAparenciaStore((s) => s.legenda);
+    const estiloDaLegenda = useMemo(() => ({
+        fontSize: { pequena: 14, media: 18, grande: 24, enorme: 32 }[legendaEscolhida.tamanho],
+        paddingBottom: legendaEscolhida.posicao === 'baixo' ? 8 : 88,
+    }), [legendaEscolhida.tamanho, legendaEscolhida.posicao]);
+    const marcarConcluido = useExtrasStore((s) => s.marcar);
+    const somarTempoAssistido = useExtrasStore((s) => s.somarTempo);
+    const concluirSePreciso = useCallback((tempo: number, dur: number) => {
+        if (dur <= 0 || tempo / dur < 0.9 || !params.id) return;
+        if (params.seriesId && params.season) {
+            const ep = params.episode ? parseInt(params.episode) : 0;
+            if (!ep) return;
+            const nome = (params.title || '').split(' - T')[0] || params.seriesId;
+            marcarConcluido(chaveEpisodio(params.seriesId, parseInt(params.season), ep), { t: nome, s: true, T: parseInt(params.season), E: ep, d: Math.round(dur) });
+        } else {
+            marcarConcluido(chaveFilme(params.id), { t: params.title || params.id, s: false, d: Math.round(dur) });
+        }
+    }, [params.id, params.seriesId, params.season, params.episode, params.title, marcarConcluido]);
+
     useEffect(() => {
         if (!params.id || !temDuracao || paused) return;
 
@@ -667,6 +690,8 @@ export default function MediaPlayerScreen() {
             const duration = durationRef.current;
             if (currentTime <= 0 || duration <= 0) return;
             addToHistory(params.id, currentTime, duration);
+            somarTempoAssistido(5);
+            concluirSePreciso(currentTime, duration);
 
             // If it's a series, also update series-level progress
             if (params.seriesId && params.season) {
@@ -684,7 +709,7 @@ export default function MediaPlayerScreen() {
         }, 5000);
 
         return () => clearInterval(interval);
-    }, [params.id, params.seriesId, params.season, params.nextEpisode, offlineItem?.episodeNumber, temDuracao, paused, addToHistory, setSeriesProgress]);
+    }, [params.id, params.seriesId, params.season, params.nextEpisode, offlineItem?.episodeNumber, temDuracao, paused, addToHistory, setSeriesProgress, somarTempoAssistido, concluirSePreciso]);
 
     // ─────────────────────────────────────────────────────────────────────
     // Fullscreen / lifecycle
@@ -1125,13 +1150,14 @@ export default function MediaPlayerScreen() {
         isMountedRef.current = false;
         if (params.id) {
             addToHistory(params.id, currentTime, duration);
+            concluirSePreciso(currentTime, duration);
             if (params.seriesId && params.season) {
                 const epNum = offlineItem?.episodeNumber ?? (params.nextEpisode ? parseInt(params.nextEpisode) - 1 : 0);
                 setSeriesProgress(params.seriesId, parseInt(params.season), epNum, params.id, currentTime, duration);
             }
         }
         router.back();
-    }, [params.id, params.seriesId, params.season, params.nextEpisode, offlineItem?.episodeNumber, currentTime, duration, router, addToHistory, setSeriesProgress]);
+    }, [params.id, params.seriesId, params.season, params.nextEpisode, offlineItem?.episodeNumber, currentTime, duration, router, addToHistory, setSeriesProgress, concluirSePreciso]);
 
     const togglePause = useCallback(() => {
         setPaused((p) => !p);
@@ -1403,6 +1429,7 @@ export default function MediaPlayerScreen() {
                     resizeMode={resizeMode}
                     paused={paused}
                     rate={rate}
+                    subtitleStyle={estiloDaLegenda}
                     selectedAudioTrack={selectedAudio !== null ? { type: SelectedTrackType.INDEX, value: selectedAudio } : undefined}
                     textTracks={legendaExt && legendaUri
                         ? [{ title: legendaExt.rotulo, language: legendaExt.iso as ISO639_1, type: TextTrackType.SUBRIP, uri: legendaUri }]

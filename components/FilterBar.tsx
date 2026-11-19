@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Spacing, Typography, BorderRadius } from '../constants/Colors';
 import type { MediaFilterType, MediaSortType } from '../types';
+import { nomeDoPais } from '../services/saimoSources';
 
 interface FilterBarProps {
   activeFilter: MediaFilterType;
@@ -27,6 +28,10 @@ interface FilterBarProps {
   anos?: [number, number] | null;
   idade?: number | null;
   nota?: number;
+  /** País de origem (código ISO) escolhido, e os que o acervo tem. */
+  pais?: string | null;
+  paises?: string[];
+  onPaisChange?: (pais: string | null) => void;
   onAnosChange?: (anos: [number, number] | null) => void;
   onIdadeChange?: (idade: number | null) => void;
   onNotaChange?: (nota: number) => void;
@@ -84,12 +89,15 @@ const FilterBar = memo(({
   anos = null,
   idade = null,
   nota = 0,
+  pais = null,
+  paises = [],
+  onPaisChange,
   onAnosChange,
   onIdadeChange,
   onNotaChange,
 }: FilterBarProps) => {
 
-  const hasActiveFilters = activeFilter !== 'all' || activeGenre !== null || !!anos || idade !== null || nota > 0;
+  const hasActiveFilters = activeFilter !== 'all' || activeGenre !== null || !!anos || idade !== null || nota > 0 || !!pais;
   const linha = (rotulo: string, itens: { chave: string; texto: string; ativo: boolean; aoTocar: () => void }[]) => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.genreRow} contentContainerStyle={styles.rowContent}>
       <Text style={styles.rotuloLinha}>{rotulo}</Text>
@@ -207,6 +215,10 @@ const FilterBar = memo(({
         { chave: 'todas', texto: 'Todas', ativo: idade === null, aoTocar: () => onIdadeChange(null) },
         ...IDADES.map((i) => ({ chave: String(i.idade), texto: i.rotulo, ativo: idade === i.idade,
           aoTocar: () => onIdadeChange(idade === i.idade ? null : i.idade) })),
+      ])}
+      {comDetalhes && onPaisChange && paises.length > 0 && linha('País', [
+        { chave: 'todos', texto: 'Todos', ativo: !pais, aoTocar: () => onPaisChange(null) },
+        ...paises.map((c) => ({ chave: c, texto: nomeDoPais(c), ativo: pais === c, aoTocar: () => onPaisChange(pais === c ? null : c) })),
       ])}
       {comDetalhes && onNotaChange && linha('Nota', [0, 6, 7, 8].map((n) => ({
         chave: String(n), texto: n ? `${n}+` : 'Qualquer', ativo: nota === n, aoTocar: () => onNotaChange(n),

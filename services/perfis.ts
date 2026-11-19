@@ -31,7 +31,7 @@ export const MAX_PERFIS = 10;
 export const MAX_NOME = 20;
 
 /** Chaves do AsyncStorage que são de cada perfil (apagadas junto com ele). */
-export const CHAVES_DO_PERFIL = ['saimo-favorites', 'saimo-media-store', 'saimo-novelinhas-progresso'];
+export const CHAVES_DO_PERFIL = ['saimo-favorites', 'saimo-media-store', 'saimo-novelinhas-progresso', 'saimo-extras'];
 
 const CHAVE = 'saimo-perfis';
 

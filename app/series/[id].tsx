@@ -21,6 +21,7 @@ import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Color
 import { getItemAPI } from '../../services/apiService';
 import { getTMDBDetails } from '../../services/tmdbService';
 import { useMediaStore } from '../../stores/mediaStore';
+import { chaveEpisodio, useExtrasStore } from '../../stores/extrasStore';
 import { downloadManager } from '../../services/downloadManager';
 import DownloadButton from '../../components/DownloadButton';
 import CastAction from '../../components/CastAction';
@@ -58,6 +59,10 @@ export default function SeriesDetailScreen() {
   
   const { isFavorite, addFavorite, removeFavorite, setSeriesProgress } = useMediaStore();
   const progress = useMediaStore(s => s.seriesProgress.find(p => p.seriesId === id));
+  // Episódios concluídos (pelo player, ao passar de 90%, ou marcados à mão aqui).
+  const concluidos = useExtrasStore((s) => s.concluidos);
+  const marcarConcluido = useExtrasStore((s) => s.marcar);
+  const desmarcarConcluido = useExtrasStore((s) => s.desmarcar);
   const [favorite, setFavorite] = useState(false);
   const [overviewExpanded, setOverviewExpanded] = useState(false);
   const [sourceSheet, setSourceSheet] = useState<Episode | null>(null);
@@ -591,6 +596,22 @@ export default function SeriesDetailScreen() {
                   }}
                 />
               )}
+              {series && (() => {
+                const chave = chaveEpisodio(series.id, parseInt(selectedSeason), ep.episode);
+                const feito = !!concluidos[chave];
+                return (
+                  <TouchableOpacity
+                    accessibilityLabel={feito ? 'Desmarcar como assistido' : 'Marcar como assistido'}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    onPress={() => (feito ? desmarcarConcluido(chave)
+                      : marcarConcluido(chave, { t: series.name, s: true, T: parseInt(selectedSeason), E: ep.episode, d: 0, m: true }))}
+                  >
+                    <Ionicons name={feito ? 'checkmark-circle' : 'checkmark-circle-outline'} size={26}
+                      color={feito ? Colors.success : Colors.textSecondary} />
+                  </TouchableOpacity>
+                );
+              })()}
               <TouchableOpacity onPress={() => handlePlayEpisode(ep, selectedSeason)}>
                 <Ionicons name="play-circle" size={32} color={Colors.primary} />
               </TouchableOpacity>

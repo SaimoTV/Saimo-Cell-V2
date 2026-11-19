@@ -34,6 +34,7 @@ import { verificarAtualizacaoAgora } from '../../services/atualizacao';
 import { useFocusEffect } from 'expo-router';
 import { assinarPerfis, ativo, kidsAtivo, pedeCodigo, perfis as listaPerfis } from '../../services/perfis';
 import { AvatarPerfil, PedirCodigo } from '../perfis';
+import { AparenciaAjustes, EstatisticasAjustes, LegendasAjustes, NovosEpisodiosAjustes } from '../../components/AjustesExtras';
 
 /** No perfil Kids os Ajustes pedem o código: a criança não mexe nas listas nem nos ajustes. */
 export default function SettingsScreen() {
@@ -290,6 +291,11 @@ function AjustesConteudo() {
         </View>
 
         <MinhasListas />
+
+        <AparenciaAjustes />
+        <LegendasAjustes />
+        <NovosEpisodiosAjustes />
+        <EstatisticasAjustes />
 
         {/* Interface */}
         <Text style={styles.sectionTitle}>Interface</Text>

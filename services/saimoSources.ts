@@ -1112,7 +1112,7 @@ export async function filmografiaNoAcervo(
 // ===== Detalhes (filtros de Filmes & Séries) =====
 
 /** Ano, nota (0 a 10), idade (0 = Livre, -1 = não informada) e popularidade. */
-export interface DetalheDoTitulo { ano: number; nota: number; idade: number; popularidade: number }
+export interface DetalheDoTitulo { ano: number; nota: number; idade: number; popularidade: number; pais: string }
 
 let detalhesEmMemoria: Map<string, DetalheDoTitulo> | null = null;
 let detalhesPedido: Promise<Map<string, DetalheDoTitulo>> | null = null;
@@ -1131,7 +1131,7 @@ export function carregarDetalhes(): Promise<Map<string, DetalheDoTitulo>> {
         const idade = c[4] === 'L' ? 0 : c[4] ? Number(c[4]) : -1;
         mapa.set(`${c[0] === 's' ? 's' : 'm'}|${c[1]}`, {
           ano: Number(c[2]) || 0, nota: Number(c[3]) || 0,
-          idade: Number.isFinite(idade) ? idade : -1, popularidade: Number(c[5]) || 0,
+          idade: Number.isFinite(idade) ? idade : -1, popularidade: Number(c[5]) || 0, pais: (c[6] || '').trim(),
         });
       }
       detalhesEmMemoria = mapa;
@@ -1141,6 +1141,24 @@ export function carregarDetalhes(): Promise<Map<string, DetalheDoTitulo>> {
     .finally(() => { detalhesPedido = null; });
   return detalhesPedido;
 }
+
+/** Os países que existem em detalhes.txt, do mais frequente ao menos (mínimo de 30 títulos). */
+export function paisesDoAcervo(): string[] {
+  if (!detalhesEmMemoria) return [];
+  const conta = new Map<string, number>();
+  for (const d of detalhesEmMemoria.values()) if (d.pais) conta.set(d.pais, (conta.get(d.pais) || 0) + 1);
+  return [...conta.entries()].filter(([, n]) => n >= 30).sort((a, b) => b[1] - a[1]).map(([c]) => c);
+}
+
+const NOMES_DE_PAISES: Record<string, string> = {
+  US: 'Estados Unidos', BR: 'Brasil', GB: 'Reino Unido', JP: 'Japão', CA: 'Canadá', FR: 'França', KR: 'Coreia do Sul',
+  DE: 'Alemanha', ES: 'Espanha', CN: 'China', IT: 'Itália', MX: 'México', IN: 'Índia', TR: 'Turquia', AU: 'Austrália',
+  AR: 'Argentina', RU: 'Rússia', SE: 'Suécia', DK: 'Dinamarca', NO: 'Noruega', NL: 'Holanda', PT: 'Portugal',
+  TH: 'Tailândia', HK: 'Hong Kong', TW: 'Taiwan', PL: 'Polônia', BE: 'Bélgica', IE: 'Irlanda', CO: 'Colômbia',
+  CL: 'Chile', PH: 'Filipinas', ID: 'Indonésia', NZ: 'Nova Zelândia', ZA: 'África do Sul', FI: 'Finlândia',
+  CH: 'Suíça', AT: 'Áustria', IL: 'Israel', EG: 'Egito', NG: 'Nigéria', VE: 'Venezuela', PE: 'Peru', UA: 'Ucrânia',
+};
+export const nomeDoPais = (codigo: string): string => NOMES_DE_PAISES[codigo] || codigo;
 
 export function detalheDe(item: MediaItem): DetalheDoTitulo | undefined {
   const v = parseVodId(item.id);

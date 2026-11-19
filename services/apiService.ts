@@ -93,7 +93,7 @@ export async function getCatalog(params: {
   p_category?: string; p_search?: string; p_order_by?: 'rating' | 'new' | 'name' | 'popular';
   p_is_adult?: boolean;
   /** Filtros: gênero, faixa de anos, idade máxima (0 = Livre) e nota mínima. */
-  p_genero?: string; p_anos?: [number, number]; p_idade?: number; p_nota?: number;
+  p_genero?: string; p_anos?: [number, number]; p_idade?: number; p_nota?: number; p_pais?: string;
 }): Promise<CatalogResult> {
   const page = Math.max(1, params.p_page ?? 1);
   const perPage = Math.max(1, params.p_per_page ?? PAGE_SIZE);
@@ -322,7 +322,7 @@ async function montarCatalogo(params: Parameters<typeof getCatalog>[0]): Promise
     return montarCatalogoSemLista(params);
   }
 
-  const filtra = !!(params.p_genero || params.p_anos || params.p_idade !== undefined || params.p_nota);
+  const filtra = !!(params.p_genero || params.p_anos || params.p_idade !== undefined || params.p_nota || params.p_pais);
   const precisaDetalhes = filtra || params.p_order_by === 'rating' || params.p_order_by === 'popular' || params.p_order_by === 'new';
   // Filtrando, ordenando ou navegando sem texto, o acervo inteiro entra (sem o
   // corte de 500 da busca): senão "até 12 anos" sairia só dos primeiros títulos.
@@ -343,6 +343,7 @@ async function montarCatalogo(params: Parameters<typeof getCatalog>[0]): Promise
       if (params.p_anos) { const a = anoDe(i); if (a < params.p_anos[0] || a > params.p_anos[1]) return false; }
       if (params.p_idade !== undefined && !(d && d.idade >= 0 && d.idade <= params.p_idade)) return false;
       if (params.p_nota && !(d && d.nota >= params.p_nota)) return false;
+      if (params.p_pais && d?.pais !== params.p_pais) return false;
       return true;
     });
   }

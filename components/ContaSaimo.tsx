@@ -89,6 +89,12 @@ function TrocarSenha({ aoTerminar }: { aoTerminar: () => void }) {
  * o código do e-mail. Com conta: sincroniza perfis, onde parou, favoritos,
  * listas e addons, e entra numa TV pelo código do QR. `codigoTv` vem do link do QR.
  */
+/** ABCD2345 vira ABCD-2345 enquanto digita; o que não é letra ou número some. */
+function mascaraDoCodigo(texto: string): string {
+  const limpo = texto.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  return limpo.length > 4 ? `${limpo.slice(0, 4)}-${limpo.slice(4)}` : limpo;
+}
+
 export default function ContaSaimo({ codigoTv }: { codigoTv?: string }) {
   const [conta, setConta] = useState(estadoConta());
   const [tv, setTv] = useState(codigoTv ?? '');
@@ -133,7 +139,7 @@ export default function ContaSaimo({ codigoTv }: { codigoTv?: string }) {
       <Text style={[styles.titulo, { marginTop: 14 }]}>Entrar numa TV</Text>
       <Text style={styles.texto}>Na TV, abra Ajustes &gt; Conta Saimo e leia o QR com a câmera, ou digite aqui o código que aparece nela.</Text>
       <TextInput style={[styles.campo, styles.campoCodigo]} placeholder="ABCD-2345" placeholderTextColor={Colors.textMuted}
-        autoCapitalize="characters" maxLength={9} value={tv} onChangeText={setTv} testID="conta-codigo-tv" />
+        autoCapitalize="characters" autoCorrect={false} maxLength={9} value={tv} onChangeText={(t) => setTv(mascaraDoCodigo(t))} testID="conta-codigo-tv" />
       <TouchableOpacity style={styles.botao} disabled={ocupado || (codigoDoQr(tv) ?? '').length !== 8} testID="conta-aprovar-tv"
         onPress={() => tentar(async () => {
           const aparelho = await aprovarTv(codigoDoQr(tv) ?? tv);

@@ -6,6 +6,7 @@ import {
   StatusBar,
   ScrollView,
   FlatList,
+  TouchableOpacity,
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing } from '../../constants/Colors';
 import { useFavoritesStore } from '../../stores/favoritesStore';
 import { useMediaStore } from '../../stores/mediaStore';
+import { useExtrasStore } from '../../stores/extrasStore';
+import { useRouter } from 'expo-router';
 import { getAllChannels } from '../../data/channels';
 import { getMediaById } from '../../services/mediaService';
 import ChannelCard from '../../components/ChannelCard';
@@ -60,6 +63,10 @@ export default function FavoritesScreen() {
     channelRows.push(favoriteChannels.slice(i, i + 2));
   }
 
+  const router = useRouter();
+  const avisosEp = useExtrasStore((s) => s.avisos);
+  const dispensarAviso = useExtrasStore((s) => s.dispensarAviso);
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
@@ -84,6 +91,25 @@ export default function FavoritesScreen() {
           contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + 80 }]}
           showsVerticalScrollIndicator={false}
         >
+          {/* Episódios novos nas séries favoritas */}
+          {avisosEp.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Episódios novos</Text>
+              {avisosEp.map((a) => (
+                <View key={a.id} style={styles.avisoLinha}>
+                  <TouchableOpacity style={styles.avisoAbrir}
+                    onPress={() => { dispensarAviso(a.id); router.push({ pathname: '/series/[id]', params: { id: a.id } } as any); }}>
+                    <Text style={styles.avisoNome} numberOfLines={1}>{a.nome}</Text>
+                    <Text style={styles.avisoSub}>{a.novos} {a.novos === 1 ? 'episódio novo' : 'episódios novos'} · {a.total} no total</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.avisoFechar} accessibilityLabel="Dispensar aviso" onPress={() => dispensarAviso(a.id)}>
+                    <Ionicons name="close" size={20} color={Colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Filmes e Séries Favoritos */}
           {favoriteMedia.length > 0 && (
             <View style={styles.section}>
@@ -125,6 +151,11 @@ export default function FavoritesScreen() {
 }
 
 const styles = StyleSheet.create({
+  avisoLinha: { flexDirection: 'row', alignItems: 'stretch', gap: 6, marginBottom: 8 },
+  avisoAbrir: { flex: 1, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.primary },
+  avisoNome: { color: Colors.text, fontSize: 15, fontWeight: '700' },
+  avisoSub: { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
+  avisoFechar: { width: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface },
   container: {
     flex: 1,
     backgroundColor: Colors.background,

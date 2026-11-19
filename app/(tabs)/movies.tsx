@@ -1,7 +1,9 @@
 import { temAcervoDeListas } from '../../services/saimoSources';
 import { aoMudar as aoMudarListas } from '../../services/minhasListas';
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { carregarDetalhes } from '../../services/saimoSources';
+import { carregarDetalhes, paisesDoAcervo } from '../../services/saimoSources';
+import { buscarPessoas, type PessoaAchada } from '../../services/tmdbService';
+import { useExtrasStore } from '../../stores/extrasStore';
 import BotaoApoie from '../../components/BotaoApoie';
 import {
   View,
@@ -14,7 +16,9 @@ import {
   RefreshControl,
   InteractionManager,
   ImageBackground,
+  ScrollView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -140,9 +144,24 @@ export default function MoviesScreen() {
   const [anos, setAnos] = useState<[number, number] | null>(null);
   const [idade, setIdade] = useState<number | null>(null);
   const [nota, setNota] = useState(0);
+  const [pais, setPais] = useState<string | null>(null);
+  // Atores e diretores achados pelo nome digitado; tocar abre o que existe deles no acervo.
+  const [pessoas, setPessoas] = useState<PessoaAchada[]>([]);
+  const buscasRecentes = useExtrasStore((s) => s.recentes);
+  const adicionarBusca = useExtrasStore((s) => s.adicionarBusca);
+  const limparBuscas = useExtrasStore((s) => s.limparBuscas);
+  useEffect(() => {
+    const q = debouncedQuery.trim();
+    if (q.length < 3) return;
+    let vivo = true;
+    adicionarBusca(q);
+    void buscarPessoas(q).then((l) => { if (vivo) setPessoas(l); });
+    return () => { vivo = false; };
+  }, [debouncedQuery, adicionarBusca]);
+  const [paises, setPaises] = useState<string[]>([]);
   const [comDetalhes, setComDetalhes] = useState(false);
   useEffect(() => {
-    carregarDetalhes().then((m) => { if (mountedRef.current) setComDetalhes(m.size > 0); });
+    carregarDetalhes().then((m) => { if (mountedRef.current) { setComDetalhes(m.size > 0); setPaises(paisesDoAcervo()); } });
   }, []);
 
   const [catalogResults, setCatalogResults] = useState<MediaItem[]>([]);
@@ -315,6 +334,7 @@ export default function MoviesScreen() {
     if (anos) params.p_anos = anos;
     if (idade !== null) params.p_idade = idade;
     if (nota) params.p_nota = nota;
+    if (pais) params.p_pais = pais;
 
     try {
       const result = await getCatalog(params);
@@ -338,14 +358,14 @@ export default function MoviesScreen() {
     } finally {
       if (mountedRef.current && pedido === pedidoDoCatalogo.current) setCatalogLoading(false);
     }
-  }, [debouncedQuery, activeFilter, activeSort, activeGenre, adultUnlocked, anos, idade, nota]);
+  }, [debouncedQuery, activeFilter, activeSort, activeGenre, adultUnlocked, anos, idade, nota, pais]);
 
   useEffect(() => {
-    if (debouncedQuery.trim() || activeFilter !== 'all' || activeGenre || anos || idade !== null || nota) {
+    if (debouncedQuery.trim() || activeFilter !== 'all' || activeGenre || anos || idade !== null || nota || pais) {
       loadCatalogFiltered(1);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, activeFilter, activeSort, activeGenre, anos, idade, nota]);
+  }, [debouncedQuery, activeFilter, activeSort, activeGenre, anos, idade, nota, pais]);
 
   const loadMoreCatalog = useCallback(() => {
     if (catalogLoading || catalogPage >= catalogTotalPages) return;
@@ -421,7 +441,7 @@ export default function MoviesScreen() {
 
   const genres = useMemo(() => getAllGenres(allItems), [allItems]);
 
-  const showGrid = !!(debouncedQuery.trim() || activeFilter !== 'all' || activeGenre || anos || idade !== null || nota);
+  const showGrid = !!(debouncedQuery.trim() || activeFilter !== 'all' || activeGenre || anos || idade !== null || nota || pais);
   const gridData = showGrid ? catalogResults : [];
 
   const renderCategoryRow = useCallback(({ item }: { item: CategoryRowData }) => (
@@ -619,6 +639,38 @@ export default function MoviesScreen() {
             )}
           </View>
         )}
+
+        {showSearch && searchInput.trim().length === 0 && buscasRecentes.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentesLinha}>
+            <Ionicons name="time-outline" size={16} color={Colors.textSecondary} style={{ alignSelf: 'center' }} />
+            {buscasRecentes.map((r) => (
+              <TouchableOpacity key={r} style={styles.recenteChip} onPress={() => handleSearchChange(r)}>
+                <Text style={styles.recenteTexto}>{r}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.recenteChip} onPress={limparBuscas}>
+              <Text style={[styles.recenteTexto, { color: Colors.textSecondary }]}>Limpar</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {showSearch && searchInput.trim().length >= 3 && pessoas.length > 0 && (
+          <View>
+            <Text style={styles.pessoasTitulo}>Atores e diretores</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentesLinha}>
+              {pessoas.map((p) => (
+                <TouchableOpacity key={p.id} style={styles.pessoa}
+                  onPress={() => router.push({ pathname: '/actor/[id]', params: { id: String(p.id), name: p.nome, photo: p.foto ?? '' } } as any)}>
+                  {p.foto ? <Image source={{ uri: p.foto }} style={styles.pessoaFoto} /> : <View style={[styles.pessoaFoto, { backgroundColor: Colors.surfaceVariant }]} />}
+                  <View style={{ maxWidth: 150 }}>
+                    <Text style={styles.pessoaNome} numberOfLines={1}>{p.nome}</Text>
+                    <Text style={styles.pessoaSub} numberOfLines={1}>{[p.area, p.conhecidaPor].filter(Boolean).join(' · ')}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       {!!linkFilmes && <AbasDoAcervo ativa={activeFilter} aoEscolher={setFilter} />}
@@ -633,11 +685,14 @@ export default function MoviesScreen() {
           onFilterChange={setFilter}
           onSortChange={setSort}
           onGenreChange={setGenre}
-          onClear={() => { clearFilters(); setAnos(null); setIdade(null); setNota(0); }}
+          onClear={() => { clearFilters(); setAnos(null); setIdade(null); setNota(0); setPais(null); }}
           comDetalhes={comDetalhes}
           anos={anos}
           idade={idade}
           nota={nota}
+          pais={pais}
+          paises={paises}
+          onPaisChange={setPais}
           onAnosChange={setAnos}
           onIdadeChange={setIdade}
           onNotaChange={setNota}
@@ -692,6 +747,14 @@ export default function MoviesScreen() {
 }
 
 const styles = StyleSheet.create({
+  recentesLinha: { paddingHorizontal: 16, paddingTop: 8, gap: 8, alignItems: 'center' },
+  recenteChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: Colors.border },
+  recenteTexto: { color: Colors.text, fontSize: 13 },
+  pessoasTitulo: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', paddingHorizontal: 16, marginTop: 10 },
+  pessoa: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 6, paddingRight: 12, borderRadius: 999, backgroundColor: Colors.surface },
+  pessoaFoto: { width: 40, height: 40, borderRadius: 20 },
+  pessoaNome: { color: Colors.text, fontSize: 13, fontWeight: '700' },
+  pessoaSub: { color: Colors.textSecondary, fontSize: 11 },
   container: { flex: 1, backgroundColor: Colors.background },
   trailerBanner: { height: 230, marginHorizontal: Spacing.lg, marginBottom: Spacing.lg, borderRadius: BorderRadius.lg, overflow: 'hidden', backgroundColor: Colors.surface },
   trailerShade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.46)' },

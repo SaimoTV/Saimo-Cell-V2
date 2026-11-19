@@ -144,3 +144,60 @@ export const Shadows = {
     elevation: 8,
   },
 };
+
+// ───── Aparência escolhida nos Ajustes ─────
+//
+// Os estilos do app guardam as cores no momento em que cada arquivo é carregado,
+// então a escolha precisa estar valendo antes disso: fica num arquivo pequeno
+// lido de forma síncrona aqui, na partida. Trocar a cor nos Ajustes grava o
+// arquivo e vale na próxima vez que o app abrir.
+
+export const DESTAQUES: Record<string, { nome: string; primary: string; primaryDark: string; primaryLight: string; secondary: string; secondaryDark: string; secondaryLight: string }> = {
+  padrao: { nome: 'Índigo', primary: '#6366F1', primaryDark: '#4F46E5', primaryLight: '#818CF8', secondary: '#8B5CF6', secondaryDark: '#7C3AED', secondaryLight: '#A78BFA' },
+  pordosol: { nome: 'Pôr do sol', primary: '#F97316', primaryDark: '#EA580C', primaryLight: '#FB923C', secondary: '#EF4444', secondaryDark: '#DC2626', secondaryLight: '#F87171' },
+  floresta: { nome: 'Floresta', primary: '#22C55E', primaryDark: '#16A34A', primaryLight: '#4ADE80', secondary: '#14B8A6', secondaryDark: '#0D9488', secondaryLight: '#2DD4BF' },
+  rosa: { nome: 'Rosa', primary: '#EC4899', primaryDark: '#DB2777', primaryLight: '#F472B6', secondary: '#D946EF', secondaryDark: '#C026D3', secondaryLight: '#E879F9' },
+  safira: { nome: 'Safira', primary: '#3B82F6', primaryDark: '#2563EB', primaryLight: '#60A5FA', secondary: '#06B6D4', secondaryDark: '#0891B2', secondaryLight: '#22D3EE' },
+  ouro: { nome: 'Ouro', primary: '#F59E0B', primaryDark: '#D97706', primaryLight: '#FBBF24', secondary: '#F97316', secondaryDark: '#EA580C', secondaryLight: '#FB923C' },
+};
+
+export const FUNDOS: Record<string, { nome: string; cores: Partial<typeof Colors> }> = {
+  escuro: { nome: 'Escuro', cores: {} },
+  amoled: { nome: 'Preto total', cores: { background: '#000000', surface: '#0A0A0A', surfaceVariant: '#121212', surfaceHover: '#1A1A1A', cardBg: '#0A0A0A', cardHover: '#121212', border: '#222222', cardBorder: '#222222' } },
+  grafite: { nome: 'Grafite', cores: { background: '#14161C', surface: '#1C1F27', surfaceVariant: '#242831', surfaceHover: '#2B303B', cardBg: '#1C1F27', cardHover: '#242831' } },
+};
+
+const ARQUIVO_DO_TEMA = 'saimo-tema.json';
+
+function aplicarPaleta(destaque: string, fundo: string): void {
+  const d = DESTAQUES[destaque] ?? DESTAQUES.padrao;
+  const f = FUNDOS[fundo] ?? FUNDOS.escuro;
+  Object.assign(Colors, {
+    primary: d.primary, primaryDark: d.primaryDark, primaryLight: d.primaryLight,
+    secondary: d.secondary, secondaryDark: d.secondaryDark, secondaryLight: d.secondaryLight,
+    gradientStart: d.primary, gradientEnd: d.secondary, progressFill: d.primary,
+    ...f.cores,
+  });
+}
+
+/** Guarda a escolha para a próxima partida (vale a partir da próxima abertura do app). */
+export function gravarTemaParaAProximaPartida(destaque: string, fundo: string): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { File, Paths } = require('expo-file-system');
+    const arquivo = new File(Paths.document, ARQUIVO_DO_TEMA);
+    if (!arquivo.exists) arquivo.create();
+    arquivo.write(JSON.stringify({ destaque, fundo }));
+  } catch { /* sem arquivo: o app abre no padrão */ }
+}
+
+(function aplicarTemaSalvo() {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { File, Paths } = require('expo-file-system');
+    const arquivo = new File(Paths.document, ARQUIVO_DO_TEMA);
+    if (!arquivo.exists) return;
+    const t = JSON.parse(arquivo.textSync());
+    if (t && (t.destaque in DESTAQUES || t.fundo in FUNDOS)) aplicarPaleta(String(t.destaque), String(t.fundo));
+  } catch { /* o padrão */ }
+})();

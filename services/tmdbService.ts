@@ -835,3 +835,28 @@ export async function buscarNoTMDB(query: string): Promise<MediaItem[]> {
     return [];
   }
 }
+
+
+/** Uma pessoa achada pelo nome (ator, diretor, roteirista…). */
+export interface PessoaAchada { id: number; nome: string; foto: string | null; area: string; conhecidaPor: string }
+
+const AREAS: Record<string, string> = { Acting: 'Atuação', Directing: 'Direção', Writing: 'Roteiro', Production: 'Produção', Creator: 'Criação' };
+
+/** Procura atores, diretores e outros nomes do cinema, do mais popular para o menos. */
+export async function buscarPessoas(termo: string): Promise<PessoaAchada[]> {
+  try {
+    const r = await fetch(`${TMDB_BASE}/search/person?query=${encodeURIComponent(termo)}&api_key=${TMDB_API_KEY}&language=pt-BR&include_adult=false`);
+    if (!r.ok) return [];
+    const j = await r.json();
+    const lista: any[] = Array.isArray(j?.results) ? j.results : [];
+    return lista.slice(0, 8).map((p) => ({
+      id: Number(p.id),
+      nome: String(p.name ?? ''),
+      foto: p.profile_path ? `https://image.tmdb.org/t/p/w185${p.profile_path}` : null,
+      area: AREAS[String(p.known_for_department ?? '')] ?? String(p.known_for_department ?? ''),
+      conhecidaPor: (Array.isArray(p.known_for) ? p.known_for : []).map((k: any) => String(k.title ?? k.name ?? '')).filter(Boolean).slice(0, 3).join(' · '),
+    })).filter((p) => p.id > 0 && p.nome);
+  } catch {
+    return [];
+  }
+}

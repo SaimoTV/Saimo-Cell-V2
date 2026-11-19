@@ -8,6 +8,8 @@ import { enableLayoutAnimations } from 'react-native-reanimated';
 import { useEffect, useRef } from 'react';
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
+import { iniciarNovosEpisodios } from '../services/novosEpisodios';
+import { useAparenciaStore } from '../stores/extrasStore';
 import { Colors } from '../constants/Colors';
 
 import Updater from '../components/Updater';
@@ -56,6 +58,9 @@ if (Platform.OS === 'android') {
 export default function RootLayout() {
   const router = useRouter();
   const ultimoDeepLinkRef = useRef<string>('');
+  const reduzirAnimacoes = useAparenciaStore((s) => s.reduzirAnimacoes);
+
+  useEffect(() => iniciarNovosEpisodios(), []);
 
   useEffect(() => {
     void carregarAddons();
@@ -168,7 +173,8 @@ export default function RootLayout() {
           contentStyle: {
             backgroundColor: Colors.background,
           },
-          animation: Platform.select({
+          // "Reduzir animações" (Ajustes) troca a transição por nenhuma.
+          animation: reduzirAnimacoes ? 'none' : Platform.select({
             android: 'fade_from_bottom',
             ios: 'slide_from_right',
           }),
