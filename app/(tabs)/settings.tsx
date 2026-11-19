@@ -29,6 +29,7 @@ import { useLinksStore } from '../../stores/linksStore';
 import PinModal from '../../components/PinModal';
 import MinhasListas from '../../components/MinhasListas';
 import ContaSaimo from '../../components/ContaSaimo';
+import { aoMudarConta, estadoConta } from '../../services/conta';
 import ListasModal from '../../components/ListasModal';
 import { verificarAtualizacaoAgora } from '../../services/atualizacao';
 import { useFocusEffect } from 'expo-router';
@@ -58,6 +59,8 @@ export default function SettingsScreen() {
 }
 
 function AjustesConteudo() {
+  const [contaLogada, setContaLogada] = useState(!!estadoConta().token);
+  React.useEffect(() => aoMudarConta((e) => setContaLogada(!!e.token)), []);
   const brilhoApp = useBrilhoStore((s) => s.brilho);
   const definirBrilho = useBrilhoStore((s) => s.definir);
   const insets = useSafeAreaInsets();
@@ -219,7 +222,15 @@ function AjustesConteudo() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Apoie: em destaque, antes de tudo */}
+        {/* Conta Saimo (opcional): primeira opção; em destaque enquanto não há conta. */}
+        {!kidsAtivo() && (
+          <View style={contaLogada ? undefined : styles.contaDestaque}>
+            <Text style={styles.sectionTitle}>Conta Saimo</Text>
+            <ContaSaimo />
+          </View>
+        )}
+
+        {/* Apoie */}
         {Platform.OS !== 'ios' && (
         <TouchableOpacity onPress={() => router.push('/apoie' as any)} activeOpacity={0.85} accessibilityRole="button">
           <LinearGradient colors={['#0FA89A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.apoie}>
@@ -232,12 +243,6 @@ function AjustesConteudo() {
           </LinearGradient>
         </TouchableOpacity>
         )}
-
-        {/* Conta Saimo (opcional): sincronizar pela internet e entrar nas TVs pelo QR. */}
-        {!kidsAtivo() && (<>
-          <Text style={styles.sectionTitle}>Conta Saimo</Text>
-          <ContaSaimo />
-        </>)}
 
         {/* Perfis */}
         <Text style={styles.sectionTitle}>Perfis</Text>
@@ -541,6 +546,7 @@ function AjustesConteudo() {
 }
 
 const styles = StyleSheet.create({
+  contaDestaque: { borderWidth: 2, borderColor: Colors.primary, borderRadius: 20, padding: 8, marginBottom: 12 },
   apoie: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, marginBottom: 8 },
   apoieTitulo: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   apoieTexto: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },

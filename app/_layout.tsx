@@ -25,7 +25,8 @@ import { downloadManager } from '../services/downloadManager';
 import { useDownloadStore } from '../stores/downloadStore';
 import { initNotifications } from '../services/downloadNotifications';
 import { iniciar as iniciarTelemetria } from '../services/telemetria';
-import { iniciarConta } from '../services/conta';
+import { iniciarConta, estadoConta } from '../services/conta';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saimoConnect } from '../services/saimoConnect';
 import { carregarAddons, instalarAddon, normalizarUrlAddon } from '../services/addons';
 import { carregarDebridConfig } from '../services/debrid';
@@ -184,6 +185,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="boas-vindas" options={{ animation: 'fade', presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen name="perfis" options={{ animation: 'fade', presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen 
           name="player/[id]" 
@@ -198,7 +200,11 @@ export default function RootLayout() {
         void (async () => {
           // Com 2 ou mais perfis, pergunta quem está assistindo.
           await prepararPerfis();
-          if (deveEscolherAoAbrir()) router.push('/perfis?obrigatoria=1' as any);
+          await iniciarConta();
+          // Sem conta e sem ter escolhido "entrar sem login": primeiro as boas-vindas.
+          const semLogin = (await AsyncStorage.getItem('saimo-boas-vindas-feito').catch(() => null)) === '1';
+          if (!estadoConta().token && !semLogin) router.push('/boas-vindas' as any);
+          else if (deveEscolherAoAbrir()) router.push('/perfis?obrigatoria=1' as any);
           // Primeiro uso e cada versão nova: abre o Apoie por cima, uma vez.
           else if (await deveMostrarApoie()) router.push('/apoie' as any);
         })();

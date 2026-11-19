@@ -19,7 +19,7 @@ function haQuanto(ms: number): string {
  * Entrar ou criar a conta com e-mail e senha (o e-mail não é verificado: é só
  * o login).
  */
-function Entrar() {
+export function Entrar() {
   const [criando, setCriando] = useState(false);
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
