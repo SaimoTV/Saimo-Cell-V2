@@ -97,8 +97,8 @@ android {
         applicationId 'com.saimo.tv'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 30302
-        versionName "3.3.2"
+        versionCode 30303
+        versionName "3.3.3"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
