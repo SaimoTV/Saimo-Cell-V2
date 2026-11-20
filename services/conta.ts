@@ -17,7 +17,8 @@ import { assinarPerfis } from './perfis';
 /** Endereço do servidor. Em teste: EXPO_PUBLIC_CONTA_API=http://10.0.2.2:8787 no build. */
 export const CONTA_API = (process.env.EXPO_PUBLIC_CONTA_API || 'https://conta.saimo-tv.com.br').replace(/\/$/, '');
 const CHAVE = 'saimo-conta-v1';
-const DEZ_MIN = 10 * 60 * 1000;
+/** Conferência periódica com o app aberto (abrir e voltar ao app já sincronizam na hora). */
+const PERIODICO = 15 * 60 * 1000;
 
 export interface EstadoConta {
   token: string | null;
@@ -189,8 +190,11 @@ export function sincronizar(forcar = false): Promise<void> {
   return emCurso;
 }
 
-/** Entre um envio e outro, no mínimo isso (assistindo, o ponto muda o tempo todo). */
-const INTERVALO_MINIMO = 120_000;
+/**
+ * Entre um envio e outro, no mínimo isso (assistindo, o ponto muda o tempo todo).
+ * Ao ir para segundo plano, o que falta vai na hora (AppState abaixo).
+ */
+const INTERVALO_MINIMO = 300_000;
 
 let agendado: ReturnType<typeof setTimeout> | null = null;
 /**
@@ -224,8 +228,14 @@ export function iniciarConta(): Promise<void> {
     aoMudarListas(() => agendar());
     aoMudarAddons(() => agendar());
     assinarPerfis(() => agendar(5000));
-    AppState.addEventListener('change', (s) => { if (s === 'active' && Date.now() - estado.sincronizadaEm > 60_000) void sincronizar(); });
-    setInterval(() => { if (AppState.currentState === 'active') void sincronizar(); }, DEZ_MIN);
+    AppState.addEventListener('change', (s) => {
+      if (s === 'active' && Date.now() - estado.sincronizadaEm > 60_000) void sincronizar();
+      // Saiu do app com mudança ainda não enviada (ex.: o ponto do filme): manda já.
+      else if (s === 'background' && estado.token && !emCurso) {
+        try { if (JSON.stringify(pacoteDeDados()) !== ultimoEnviado) void sincronizar(); } catch { /* segue */ }
+      }
+    });
+    setInterval(() => { if (AppState.currentState === 'active') void sincronizar(); }, PERIODICO);
     if (estado.token) setTimeout(() => void sincronizar(), 4000);
   })();
   return carregado;
