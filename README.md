@@ -251,3 +251,5 @@ app); o acervo da lista vai para `minhas_listas/<id>-acervo/` no formato Saimo e
 ## Conta Saimo (opcional)
 
 Ajustes > Conta Saimo: entrar com o código do e-mail ou com e-mail e senha, criar e trocar a senha, aprovar uma TV pelo código do QR (`saimo://conectar?c=` abre direto) e apagar a conta. Código em `services/conta.ts` e `components/ContaSaimo.tsx`; sincroniza pelo pacote do Connect (`services/sincroniaDados.ts`). Teste: `EXPO_PUBLIC_CONTA_API=http://10.0.2.2:8787` no build (o build de produção não leva a variável). Contrato: SaimoPlayer/docs/conta.md. Sem conta, nada muda.
+
+Remoções (3.3.3): o que sai do Continue assistindo, dos favoritos e das Minhas listas é anotado em `services/remocoes.ts` (as stores chamam de lá) e viaja no pacote da conta e do Connect, para a sincronia não trazer de volta (regras em SaimoPlayer/docs/perfis.md). Uma sincronia é um pedido só (PUT com mudança, GET sem), no máximo um envio a cada 2 min. Lista importada de arquivo continua só no aparelho.

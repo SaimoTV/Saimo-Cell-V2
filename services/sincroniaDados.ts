@@ -16,6 +16,8 @@
  * não desmarca no outro). Endereços: vale o escolhido por último; quem nunca
  * escolheu (padrão ou vazio) fica com o que o outro escolheu. Listas
  * adicionadas: união pelo link (a lista vinda de arquivo fica só no aparelho).
+ * Remoções (./remocoes.ts) viajam junto: o que foi tirado num aparelho não
+ * volta pela união (só volta se entrar de novo depois).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMediaStore } from '../stores/mediaStore';
@@ -24,10 +26,14 @@ import { useChannelStore } from '../stores/channelStore';
 import { useLinksStore } from '../stores/linksStore';
 import { makeVodId, parseVodId, channelId } from './saimoSources';
 import { aplicarLinks } from './listas';
-import { adicionarLista, carregarMinhasListas, getListas, linkValido } from './minhasListas';
+import { adicionarLista, carregarMinhasListas, getListas, linkValido, removerLista } from './minhasListas';
 import { aplicarAddonsRemotos, exportarAddonsParaSync } from './addons';
 import { aplicarDebridRemoto, exportarDebridParaSync } from './debrid';
 import { normalizarLink } from '../utils/links';
+import {
+  camposDoPacote, canalRemovido, carregarRegistro, garantirRegistro, gravarRegistroListas, juntarRegistro,
+  juntarRegistroListas, listaRemovida, registro, registroListas, tituloDoId, tituloRemovido,
+} from './remocoes';
 import { TUDO, type EscolhaSincronia } from './connectSincronia';
 import { PRINCIPAL, aoTrocarPerfil, chaveDoPerfil, idAtivo, mesclarPerfis, perfis, removidos } from './perfis';
 
@@ -43,7 +49,7 @@ interface Progresso {
   em: number;
 }
 
-interface FavTitulo { tipo: 'f' | 's'; titulo: string; ano: string; letra: string }
+interface FavTitulo { tipo: 'f' | 's'; titulo: string; ano: string; letra: string; em?: number }
 
 /** Episódio no histórico: `<id da série>|e|<temporada>|<episódio>`. */
 function lerEpisodio(id: string): { serie: string; temporada: number; episodio: number } | null {
@@ -105,13 +111,25 @@ async function gravarDe(id: string, d: DadosPerfil): Promise<void> {
   ]);
 }
 
-function campos(d: DadosPerfil, nomes: Map<string, string>): { progresso: Progresso[]; favTitulos: FavTitulo[]; favCanais: string[] } {
+let registroListasCarregado: Awaited<ReturnType<typeof registroListas>> | null = null;
+void registroListas().then((r) => { registroListasCarregado = r; });
+
+/** Lê do armazenamento o registro de remoções de todos os perfis e o das listas (antes de sincronizar). */
+export async function carregarRegistros(): Promise<void> {
+  await Promise.all(perfis().map((p) => carregarRegistro(p.id)));
+  registroListasCarregado = await registroListas();
+}
+
+function campos(d: DadosPerfil, nomes: Map<string, string>, perfilId: string): { progresso: Progresso[]; favTitulos: FavTitulo[]; favCanais: string[]; extras: Record<string, unknown> } {
+  const reg = registro(perfilId);
   const progresso: Progresso[] = [];
   for (const h of d.media.watchHistory) {
     if (!h.progress || h.progress <= 0) continue;
     const ep = lerEpisodio(h.id);
     const base = parseVodId(ep ? ep.serie : h.id);
     if (!base) continue;
+    // Tirado do "Continue assistindo" (e não visto depois): fica aqui para retomar, mas não vai.
+    if (tituloRemovido(reg.prog, { tipo: base.type === 'series' ? 's' : 'f', titulo: base.title, ano: base.year }, h.watchedAt)) continue;
     progresso.push({
       tipo: base.type === 'series' ? 's' : 'f',
       titulo: base.title,
@@ -127,32 +145,44 @@ function campos(d: DadosPerfil, nomes: Map<string, string>): { progresso: Progre
   const favTitulos: FavTitulo[] = [];
   for (const f of d.media.favorites) {
     const v = parseVodId(f.id);
-    if (v) favTitulos.push({ tipo: v.type === 'series' ? 's' : 'f', titulo: v.title, ano: v.year, letra: v.letter });
+    if (v) favTitulos.push({ tipo: v.type === 'series' ? 's' : 'f', titulo: v.title, ano: v.year, letra: v.letter, ...(f.addedAt ? { em: f.addedAt } : {}) });
   }
   const favCanais = d.canais.map((id) => nomes.get(id)).filter((n): n is string => !!n);
-  return { progresso, favTitulos, favCanais };
+  return { progresso, favTitulos, favCanais, extras: camposDoPacote(reg, (id) => nomes.get(id)) };
 }
 
 /** Pacote para a TV, só com o que a pessoa aceitou sincronizar com ela. */
 export function pacoteDeDados(escolha: EscolhaSincronia = TUDO): Record<string, unknown> {
   const nomes = new Map(useChannelStore.getState().channels.map((c) => [c.id, c.name]));
   // Os campos de sempre levam o perfil principal: apps sem perfis seguem funcionando.
-  const { progresso, favTitulos, favCanais } = campos(dadosDe(PRINCIPAL), nomes);
+  const principal = campos(dadosDe(PRINCIPAL), nomes, PRINCIPAL);
+  const { progresso, favTitulos, favCanais } = principal;
   const listaPerfis = perfis().map((p) => {
-    const c = p.id === PRINCIPAL ? { progresso, favTitulos, favCanais } : campos(dadosDe(p.id), nomes);
+    const c = p.id === PRINCIPAL ? principal : campos(dadosDe(p.id), nomes, p.id);
+    const ex = c.extras as Record<string, unknown>;
     return {
       id: p.id, nome: p.nome, avatar: p.avatar, em: p.em,
       ...(p.kids ? { kids: true, codigo: p.codigo } : {}),
-      ...(escolha.historico ? { progresso: c.progresso } : {}),
-      ...(escolha.favoritos ? { favTitulos: c.favTitulos, favCanais: c.favCanais } : {}),
+      ...(escolha.historico ? { progresso: c.progresso, ...(ex.progressoRemovido ? { progressoRemovido: ex.progressoRemovido } : {}) } : {}),
+      ...(escolha.favoritos ? {
+        favTitulos: c.favTitulos, favCanais: c.favCanais,
+        ...(ex.favTitulosRemovidos ? { favTitulosRemovidos: ex.favTitulosRemovidos } : {}),
+        ...(ex.favCanaisRemovidos ? { favCanaisRemovidos: ex.favCanaisRemovidos } : {}),
+        ...(ex.favCanaisEm ? { favCanaisEm: ex.favCanaisEm } : {}),
+      } : {}),
     };
   });
   const links = useLinksStore.getState();
+  const regListas = registroListasCarregado;
   const listas = {
     canais: links.linkCanais,
     filmes: links.linkFilmes,
     em: links.linksEm,
-    minhas: getListas().filter((l) => !!l.link).map((l) => ({ nome: l.nome, link: l.link as string })),
+    minhas: getListas().filter((l) => !!l.link).map((l) => {
+      const em = regListas?.em[l.link as string];
+      return { nome: l.nome, link: l.link as string, ...(em ? { em } : {}) };
+    }),
+    ...(regListas?.rem.length ? { minhasRemovidas: regListas.rem } : {}),
   };
   const addons = exportarAddonsParaSync();
   const debrid = exportarDebridParaSync();
@@ -185,25 +215,41 @@ async function aplicarListas(l: any): Promise<void> {
       if (c !== local.linkCanais || f !== local.linkFilmes) await aplicarLinks(c, f, em);
     }
   }
-  const minhas: Array<{ nome?: string; link?: string }> = Array.isArray(l.minhas) ? l.minhas : [];
-  if (!minhas.length) return;
   await carregarMinhasListas();
+  const reg = juntarRegistroListas(await registroListas(), l.minhasRemovidas);
+  await gravarRegistroListas(reg);
+  registroListasCarregado = await registroListas();
+  for (const x of getListas()) {
+    if (x.link && listaRemovida(reg, x.link)) await removerLista(x.id, false).catch(() => {});
+  }
+  const minhas: Array<{ nome?: string; link?: string; em?: number }> = Array.isArray(l.minhas) ? l.minhas : [];
   for (const m of minhas) {
     const link = typeof m?.link === 'string' ? m.link.trim() : '';
-    if (!linkValido(link) || getListas().some((x) => x.link === link)) continue;
+    if (!linkValido(link) || getListas().some((x) => x.link === link) || listaRemovida(reg, link, Number(m.em) || 0)) continue;
     try { await adicionarLista(link, typeof m.nome === 'string' ? m.nome : ''); } catch { /* lista fora do ar ou limite: segue */ }
   }
 }
 
 /** Junta progresso e favoritos vindos da TV aos dados de um perfil. */
-function juntar(d: DadosPerfil, msg: { progresso?: unknown; favTitulos?: unknown; favCanais?: unknown }): DadosPerfil {
-  const historico = [...d.media.watchHistory];
-  const series = [...d.media.seriesProgress];
+function juntar(perfilId: string, d: DadosPerfil, msg: Record<string, any>): DadosPerfil {
+  const reg = juntarRegistro(perfilId, msg, channelId);
+  const titulo = (id: string) => tituloDoId(id);
+  // O que foi removido em outro aparelho depois de entrar aqui sai daqui também.
+  const historico = d.media.watchHistory.filter((h) => {
+    if (lerEpisodio(h.id)) return true; // episódios ficam (para retomar); a série sai da fileira abaixo
+    const t = titulo(h.id);
+    return !t || !tituloRemovido(reg.prog, t, h.watchedAt);
+  });
+  const series = d.media.seriesProgress.filter((sp: any) => {
+    const t = titulo(String(sp.seriesId ?? ''));
+    return !t || !tituloRemovido(reg.prog, t, Number(sp.watchedAt) || 0);
+  });
   const lista: Progresso[] = Array.isArray(msg.progresso) ? msg.progresso : [];
   for (const p of lista) {
     if (!p?.titulo || !(p.pos > 0)) continue;
     const serie = p.tipo === 's';
     if (serie && !(p.temporada > 0 && p.episodio > 0)) continue;
+    if (tituloRemovido(reg.prog, { tipo: serie ? 's' : 'f', titulo: p.titulo, ano: p.ano || '' }, Number(p.em) || 0)) continue;
     const base = serie
       ? makeVodId('series', p.letra || '', p.titulo, p.ano || '')
       : makeVodId('movie', p.letra || '', p.titulo);
@@ -226,19 +272,23 @@ function juntar(d: DadosPerfil, msg: { progresso?: unknown; favTitulos?: unknown
   }
   historico.sort((a, b) => b.watchedAt - a.watchedAt);
 
-  const favoritos = [...d.media.favorites];
+  const favoritos = d.media.favorites.filter((f) => {
+    const t = titulo(f.id);
+    return !t || !tituloRemovido(reg.fav, t, f.addedAt || 0);
+  });
   for (const f of (Array.isArray(msg.favTitulos) ? msg.favTitulos : []) as FavTitulo[]) {
     if (!f?.titulo) continue;
+    if (tituloRemovido(reg.fav, { tipo: f.tipo, titulo: f.titulo, ano: f.ano || '' }, Number(f.em) || 0)) continue;
     const id = f.tipo === 's'
       ? makeVodId('series', f.letra || '', f.titulo, f.ano || '')
       : makeVodId('movie', f.letra || '', f.titulo);
-    if (!favoritos.some((x) => x.id === id)) favoritos.push({ id, addedAt: Date.now() });
+    if (!favoritos.some((x) => x.id === id)) favoritos.push({ id, addedAt: Number(f.em) || Date.now() });
   }
-  const canais = [...d.canais];
+  const canais = d.canais.filter((c) => !canalRemovido(reg, c));
   for (const nome of (Array.isArray(msg.favCanais) ? msg.favCanais : []) as string[]) {
     if (typeof nome !== 'string' || !nome) continue;
     const id = channelId(nome);
-    if (!canais.includes(id)) canais.push(id);
+    if (!canais.includes(id) && !canalRemovido(reg, id)) canais.push(id);
   }
   return { media: { favorites: favoritos, watchHistory: historico.slice(0, 500), seriesProgress: series }, canais };
 }
@@ -248,8 +298,12 @@ export function aplicarDados(recebido: any, escolha: EscolhaSincronia = TUDO): v
   // Só entra o que a pessoa aceitou sincronizar com esta TV.
   const filtrar = (m: any) => ({
     progresso: escolha.historico ? m?.progresso : undefined,
+    progressoRemovido: escolha.historico ? m?.progressoRemovido : undefined,
     favTitulos: escolha.favoritos ? m?.favTitulos : undefined,
     favCanais: escolha.favoritos ? m?.favCanais : undefined,
+    favTitulosRemovidos: escolha.favoritos ? m?.favTitulosRemovidos : undefined,
+    favCanaisRemovidos: escolha.favoritos ? m?.favCanaisRemovidos : undefined,
+    favCanaisEm: escolha.favoritos ? m?.favCanaisEm : undefined,
   });
   const msg = {
     listas: escolha.listas ? recebido?.listas : undefined,
@@ -268,12 +322,13 @@ export function aplicarDados(recebido: any, escolha: EscolhaSincronia = TUDO): v
       await carregarOutrosPerfis();
       for (const p of remotos) {
         if (!existem.has(p.id)) continue;
-        await gravarDe(p.id, juntar(dadosDe(p.id), filtrar(p)));
+        await garantirRegistro(p.id);
+        await gravarDe(p.id, juntar(p.id, dadosDe(p.id), filtrar(p)));
       }
     })().catch(() => { /* não derruba a conexão */ });
   } else {
     // TV sem perfis: os campos de sempre são do perfil principal.
-    void gravarDe(PRINCIPAL, juntar(dadosDe(PRINCIPAL), filtrar(recebido))).catch(() => {});
+    void garantirRegistro(PRINCIPAL).then(() => gravarDe(PRINCIPAL, juntar(PRINCIPAL, dadosDe(PRINCIPAL), filtrar(recebido)))).catch(() => {});
   }
 
   void aplicarListas(msg?.listas).catch(() => { /* não derruba a conexão */ });

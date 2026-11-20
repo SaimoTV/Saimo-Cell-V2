@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { armazenamentoDoPerfil } from '../services/perfis';
+import { anotarContinuar, anotarFavorito } from '../services/remocoes';
 import type { MediaFilterType, MediaSortType, SeriesProgress } from '../types';
 
 interface MediaFavorite {
@@ -72,6 +73,7 @@ export const useMediaStore = create<MediaState>()(
             addFavorite: (id: string) => {
                 const { favorites } = get();
                 if (!favorites.some(f => f.id === id)) {
+                    anotarFavorito(id, false);
                     const newFavorites = [...favorites, { id, addedAt: Date.now() }];
                     set({
                         favorites: newFavorites,
@@ -81,6 +83,7 @@ export const useMediaStore = create<MediaState>()(
             },
 
             removeFavorite: (id: string) => {
+                if (get().favorites.some(f => f.id === id)) anotarFavorito(id, true);
                 const newFavorites = get().favorites.filter(f => f.id !== id);
                 set({
                     favorites: newFavorites,
@@ -145,6 +148,8 @@ export const useMediaStore = create<MediaState>()(
 
             removeFromContinue: (id: string) => {
                 const limpo = semCodificacao(id);
+                // A sincronia não traz de volta (os episódios ficam aqui, para retomar, mas não voltam à fileira).
+                anotarContinuar(limpo);
                 set(state => ({
                     watchHistory: state.watchHistory.filter(h => h.id !== id && semCodificacao(h.id) !== limpo),
                     seriesProgress: state.seriesProgress.filter(p => p.seriesId !== limpo && p.seriesId !== id),

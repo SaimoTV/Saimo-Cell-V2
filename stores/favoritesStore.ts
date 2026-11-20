@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { armazenamentoDoPerfil } from '../services/perfis';
+import { anotarCanal } from '../services/remocoes';
 
 interface FavoritesStore {
     favorites: string[];
@@ -21,6 +22,7 @@ export const useFavoritesStore = create<FavoritesStore>()(
             addFavorite: (channelId: string) => {
                 const { favorites } = get();
                 if (!favorites.includes(channelId)) {
+                    anotarCanal(channelId, false);
                     const newFavorites = [...favorites, channelId];
                     set({
                         favorites: newFavorites,
@@ -31,6 +33,7 @@ export const useFavoritesStore = create<FavoritesStore>()(
 
             removeFavorite: (channelId: string) => {
                 const { favorites } = get();
+                if (favorites.includes(channelId)) anotarCanal(channelId, true);
                 const newFavorites = favorites.filter(id => id !== channelId);
                 set({
                     favorites: newFavorites,
@@ -52,6 +55,7 @@ export const useFavoritesStore = create<FavoritesStore>()(
             },
 
             clearFavorites: () => {
+                for (const c of get().favorites) anotarCanal(c, true);
                 set({ favorites: [], favoriteIds: new Set<string>() });
             },
         }),

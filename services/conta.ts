@@ -6,7 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { pacoteDeDados, aplicarDados } from './sincroniaDados';
+import { pacoteDeDados, aplicarDados, carregarRegistros } from './sincroniaDados';
 import { useMediaStore } from '../stores/mediaStore';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useLinksStore } from '../stores/linksStore';
@@ -152,12 +152,11 @@ export function codigoDoQr(texto: string): string | null {
 
 let ultimoEnviado = '';
 let emCurso: Promise<void> | null = null;
-let aplicandoAte = 0;
 
 /**
- * Baixa o que a conta tem, junta aqui (as mesmas regras do Connect) e manda o
- * que este aparelho tem; o servidor junta de novo e guarda. Só manda quando
- * algo mudou desde o último envio.
+ * Com mudança aqui: manda (PUT) e o servidor devolve tudo já juntado, que é
+ * aplicado aqui. Sem mudança: só baixa (GET) e junta. Um pedido por sincronia
+ * (cada pedido ao servidor é cobrado).
  */
 export function sincronizar(forcar = false): Promise<void> {
   if (!estado.token) return Promise.resolve();
@@ -165,19 +164,19 @@ export function sincronizar(forcar = false): Promise<void> {
   emCurso = (async () => {
     mudar({ sincronizando: true });
     try {
-      const remoto = await api('GET', '/v1/dados');
-      if (remoto?.dados) {
-        aplicandoAte = Date.now() + 4000;
-        aplicarDados(remoto.dados);
-        // aplicarDados grava em segundo plano: espera assentar antes de montar o pacote daqui.
-        await new Promise((ok) => setTimeout(ok, 2500));
-      }
+      await carregarRegistros();
       const pacote = pacoteDeDados();
       const texto = JSON.stringify(pacote);
-      if (forcar || texto !== ultimoEnviado) {
-        await api('PUT', '/v1/dados', { dados: pacote });
-        ultimoEnviado = texto;
+      const remoto = forcar || texto !== ultimoEnviado
+        ? await api('PUT', '/v1/dados', { dados: pacote })
+        : await api('GET', '/v1/dados');
+      if (remoto?.dados) {
+        aplicarDados(remoto.dados);
+        // aplicarDados grava em segundo plano: espera assentar antes de ver o que ficou aqui.
+        await new Promise((ok) => setTimeout(ok, 2500));
       }
+      // O servidor já tem tudo o que ficou aqui depois de juntar: só manda de novo se mudar.
+      ultimoEnviado = JSON.stringify(pacoteDeDados());
       mudar({ sincronizadaEm: Date.now(), erro: null });
       await gravar();
     } catch (e) {
@@ -190,12 +189,25 @@ export function sincronizar(forcar = false): Promise<void> {
   return emCurso;
 }
 
+/** Entre um envio e outro, no mínimo isso (assistindo, o ponto muda o tempo todo). */
+const INTERVALO_MINIMO = 120_000;
+
 let agendado: ReturnType<typeof setTimeout> | null = null;
-/** Algo mudou aqui: manda em alguns segundos (várias mudanças viram um envio só). */
+/**
+ * Algo mudou aqui: manda em alguns segundos (várias mudanças viram um envio só),
+ * no máximo um envio a cada 2 min. Sem mudança desde o último envio (eco de
+ * juntar), não vai à rede.
+ */
 function agendar(ms = 15000) {
-  if (!estado.token || Date.now() < aplicandoAte) return;
+  if (!estado.token) return;
   if (agendado) clearTimeout(agendado);
-  agendado = setTimeout(() => { agendado = null; void sincronizar(); }, ms);
+  const espera = Math.max(ms, INTERVALO_MINIMO - (Date.now() - estado.sincronizadaEm));
+  agendado = setTimeout(() => {
+    agendado = null;
+    if (emCurso) { agendar(3000); return; }
+    try { if (JSON.stringify(pacoteDeDados()) === ultimoEnviado) return; } catch { /* manda */ }
+    void sincronizar();
+  }, espera);
 }
 
 /** Na abertura do app: lê a sessão e começa a sincronizar (abrir, voltar ao app, mudanças, a cada 10 min). */

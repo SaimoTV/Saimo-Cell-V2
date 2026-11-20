@@ -2,6 +2,7 @@
 // entram no app. Tudo fica só neste aparelho (AsyncStorage para os dados da
 // lista, um arquivo por lista para os canais já lidos). Nada vai a servidor
 // nosso, e o link nunca é mostrado nem registrado em log.
+import { anotarLista } from './remocoes';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { Channel, ChannelStream } from '../types';
@@ -312,7 +313,9 @@ export async function adicionarLista(link: string, nome: string): Promise<MinhaL
   const l = link.trim();
   if (!linkValido(l)) throw new ErroLista('O link precisa começar com http:// ou https://');
   if (listas.length >= MAX_LISTAS) throw new ErroLista(`Você pode ter até ${MAX_LISTAS} listas`);
-  return guardarNova(l, nome, await baixar(l));
+  const nova = await guardarNova(l, nome, await baixar(l));
+  await anotarLista(l, false);
+  return nova;
 }
 
 /** Lista vinda de um arquivo escolhido no aparelho (sem link). */
@@ -375,8 +378,11 @@ export async function alternarLista(id: string): Promise<void> {
   avisar();
 }
 
-export async function removerLista(id: string): Promise<void> {
+/** `anotar` falso: quem tira é a sincronia (a remoção já veio de outro aparelho). */
+export async function removerLista(id: string, anotar = true): Promise<void> {
   await carregarMinhasListas();
+  const link = listas.find(l => l.id === id)?.link;
+  if (anotar) await anotarLista(link, true);
   canaisPorLista.delete(id);
   listas = listas.filter(l => l.id !== id);
   await FileSystem.deleteAsync(PASTA + id + '.json', { idempotent: true }).catch(() => {});
