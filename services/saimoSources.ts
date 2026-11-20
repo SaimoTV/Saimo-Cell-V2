@@ -146,9 +146,9 @@ async function writeCache(name: string, text: string): Promise<void> {
   }
 }
 
-async function fetchText(url: string, name: string, force = false): Promise<string> {
+async function fetchText(url: string, name: string, force = false, guardadoPrimeiro = false): Promise<string> {
   const cached = await readCache(name);
-  if (!force && cached && Date.now() - cached.savedAt < CACHE_TTL && cached.text.trim()) {
+  if (!force && cached && cached.text.trim() && (guardadoPrimeiro || Date.now() - cached.savedAt < CACHE_TTL)) {
     return cached.text;
   }
 
@@ -183,9 +183,9 @@ async function textoCanais(arquivo: string, nomeNoCache: string, force = false):
 }
 
 /** Arquivo da lista de filmes e séries, no endereço de hoje. */
-async function textoFilmes(arquivo: string, nomeNoCache: string, force = false): Promise<string> {
+async function textoFilmes(arquivo: string, nomeNoCache: string, force = false, guardadoPrimeiro = false): Promise<string> {
   const base = await exigirBaseFilmes();
-  return fetchText(`${base}${arquivo}`, nomeNoCache, force);
+  return fetchText(`${base}${arquivo}`, nomeNoCache, force, guardadoPrimeiro);
 }
 
 /**
@@ -923,8 +923,8 @@ export interface DestaqueRow {
   items: MediaItem[];
 }
 
-async function loadDestaquesBruto(force = false): Promise<DestaqueRow[]> {
-  const text = await textoFilmes('destaques.txt', 'vod-destaques.txt', force);
+async function loadDestaquesBruto(force = false, guardadoPrimeiro = false): Promise<DestaqueRow[]> {
+  const text = await textoFilmes('destaques.txt', 'vod-destaques.txt', force, guardadoPrimeiro);
   const rows: DestaqueRow[] = [];
   let current: DestaqueRow | null = null;
   let base = '';
@@ -1241,10 +1241,15 @@ async function destaquesDasListas(): Promise<DestaqueRow[]> {
   return filas;
 }
 
-export async function loadDestaques(force = false): Promise<DestaqueRow[]> {
+/**
+ * As fileiras do On Demand. `guardadoPrimeiro`: devolve o que já está no
+ * aparelho (qualquer idade) sem esperar a rede; a tela confere a novidade
+ * depois com `force`.
+ */
+export async function loadDestaques(force = false, guardadoPrimeiro = false): Promise<DestaqueRow[]> {
   let filas: DestaqueRow[] = [];
   try {
-    filas = await loadDestaquesBruto(force);
+    filas = await loadDestaquesBruto(force, guardadoPrimeiro);
   } catch (e) {
     if (!temAcervoDeListas()) throw e;
   }

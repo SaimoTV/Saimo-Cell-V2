@@ -130,6 +130,19 @@ export default function MoviesScreen() {
   const [bgLoading, setBgLoading] = useState(false);
 
   const [destaques, setDestaques] = useState<DestaqueRow[]>([]);
+  const destaquesTexto = useRef('');
+  const destaquesConferidos = useRef(0);
+  /** Busca a versão nova das fileiras por trás; igual à da tela, nada muda. */
+  const conferirDestaques = useCallback(() => {
+    if (Date.now() - destaquesConferidos.current < 60_000) return;
+    destaquesConferidos.current = Date.now();
+    loadDestaques(true)
+      .then(rows => {
+        const texto = JSON.stringify(rows);
+        if (texto !== destaquesTexto.current && rows.length) { destaquesTexto.current = texto; setDestaques(rows); }
+      })
+      .catch(() => { /* sem rede: fica o guardado */ });
+  }, []);
 
   const [trendingToday, setTrendingToday] = useState<MediaItem[]>([]);
   const [trendingWeek, setTrendingWeek] = useState<MediaItem[]>([]);
@@ -275,6 +288,11 @@ export default function MoviesScreen() {
 
   // O catálogo e as fileiras de destaque saem da lista de filmes/séries ou, na falta dela,
   // dos addons Stremio ativos (+ descoberta TMDB). Sem nenhum dos dois, nada é pedido.
+  // Cada vez que a aba volta à tela: confere novidade nas fileiras (no máximo 1x por minuto).
+  useFocusEffect(useCallback(() => {
+    if (linkFilmes && destaquesTexto.current) conferirDestaques();
+  }, [linkFilmes, conferirDestaques]));
+
   useEffect(() => {
     if (!linksProntos || !addonsProntos) return;
     stopLoading();
@@ -294,9 +312,11 @@ export default function MoviesScreen() {
     let active = true;
     loadCatalog(false);
     if (linkFilmes) {
-      loadDestaques()
-        .then(rows => { if (active) setDestaques(rows); })
-        .catch(e => console.warn('[Movies] destaques:', e));
+      // Cache: o guardado aparece na hora; a novidade chega depois e só troca se mudou.
+      loadDestaques(false, true)
+        .then(rows => { if (active) { setDestaques(rows); destaquesTexto.current = JSON.stringify(rows); } })
+        .catch(e => console.warn('[Movies] destaques:', e))
+        .finally(() => { if (active) conferirDestaques(); });
     }
     return () => { active = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
