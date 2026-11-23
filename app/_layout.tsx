@@ -63,6 +63,13 @@ export default function RootLayout() {
 
   useEffect(() => iniciarNovosEpisodios(), []);
 
+  // A tela foi recriada por "Aplicar" no tamanho do texto: volta aos Ajustes.
+  useEffect(() => {
+    AsyncStorage.getItem('saimo-reabrir-ajustes').then((g) => {
+      if (g) setTimeout(() => router.navigate('/(tabs)/settings' as any), 300);
+    }).catch(() => {});
+  }, [router]);
+
   useEffect(() => {
     void carregarAddons();
     void carregarDebridConfig();

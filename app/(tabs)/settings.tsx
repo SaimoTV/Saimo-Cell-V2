@@ -15,6 +15,8 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  BackHandler,
+  NativeModules,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,7 +60,110 @@ export default function SettingsScreen() {
   );
 }
 
+type IdGrupo = 'conta' | 'listas' | 'reproducao' | 'legendas' | 'aparencia' | 'perfis' | 'sistema' | 'parental';
+
+/** Os grupos dos Ajustes: a tela abre com a lista deles e cada um mostra só os seus ajustes. */
+const GRUPOS: { id: IdGrupo; nome: string; sobre: string; icone: React.ComponentProps<typeof Ionicons>['name']; semKids?: boolean }[] = [
+  { id: 'conta', nome: 'Conta Saimo', sobre: 'Perfis, listas e favoritos em todos os aparelhos', icone: 'person-circle-outline', semKids: true },
+  { id: 'listas', nome: 'Listas e conteúdo', sobre: 'Lista de canais, de filmes e Minhas listas', icone: 'list-outline' },
+  { id: 'reproducao', nome: 'Ao vivo e player', sobre: 'Guia, número do canal, nitidez, volume e atraso', icone: 'play-circle-outline' },
+  { id: 'legendas', nome: 'Legendas', sobre: 'Tamanho, cor, fundo e posição', icone: 'text-outline' },
+  { id: 'aparencia', nome: 'Aparência e acessibilidade', sobre: 'Tamanho do texto, cores e brilho', icone: 'accessibility-outline' },
+  { id: 'perfis', nome: 'Perfis e dados', sobre: 'Perfis, episódios novos, estatísticas e limpezas', icone: 'people-outline' },
+  { id: 'sistema', nome: 'Atualizações', sobre: 'Versão do app e novidades', icone: 'cloud-download-outline' },
+  { id: 'parental', nome: 'Controle parental', sobre: 'Conteúdo adulto e senha', icone: 'lock-closed-outline', semKids: true },
+];
+
+const TAMANHOS: { valor: number; nome: string }[] = [
+  { valor: 1, nome: 'Normal' }, { valor: 1.15, nome: 'Grande' }, { valor: 1.3, nome: 'Muito grande' }, { valor: 1.45, nome: 'Enorme' },
+];
+
+/**
+ * Acessibilidade com prévia: o tamanho escolhido aparece primeiro no exemplo;
+ * só "Aplicar" leva para o app inteiro (escala nativa do Android, SaimoTamanho).
+ */
+function TamanhoDoTexto() {
+  const nativo = NativeModules.SaimoTamanho;
+  const [aplicado, setAplicado] = useState(1);
+  const [rascunho, setRascunho] = useState(1);
+  React.useEffect(() => {
+    nativo?.atual?.().then((v: number) => { setAplicado(v); setRascunho(v); }).catch(() => {});
+  }, [nativo]);
+  if (!nativo) return null;
+  // A prévia compensa a escala já aplicada para mostrar a do rascunho.
+  const k = rascunho / aplicado;
+  const mudou = Math.abs(rascunho - aplicado) > 0.01;
+  return (
+    <>
+      <Text style={styles.sectionTitle}>Tamanho do texto</Text>
+      <View style={[styles.section, { padding: 10, gap: 10 }]}>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {TAMANHOS.map((t) => {
+            const on = Math.abs(rascunho - t.valor) < 0.01;
+            return (
+              <TouchableOpacity key={t.nome} testID={`ajustes-tamanho-${t.valor}`} accessibilityRole="radio" accessibilityState={{ checked: on }}
+                onPress={() => setRascunho(t.valor)} style={[styles.pilula, on && styles.pilulaOn]}>
+                <Text style={[styles.linkValor, { marginTop: 0, textAlign: 'center' }, on && { color: '#fff', fontWeight: '700' }]}>{t.nome}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <View style={styles.previa} accessibilityLabel="Prévia de como o app vai ficar">
+          <Text style={{ color: Colors.primary, fontSize: 12 * k, fontWeight: '700' }}>PRÉVIA</Text>
+          <Text style={{ color: '#fff', fontSize: 20 * k, fontWeight: '800', marginTop: 4 }}>Filmes em alta</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+            {[['A Odisseia', '2026 · Aventura'], ['Série do domingo', 'T2 · E5']].map(([n, sub]) => (
+              <View key={n} style={{ width: 120 }}>
+                <LinearGradient colors={['#8B5CF6', '#4FE3D0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ height: 70, borderRadius: 8 }} />
+                <Text style={{ color: '#fff', fontSize: 14 * k, marginTop: 4 }} numberOfLines={2}>{n}</Text>
+                <Text style={{ color: Colors.textSecondary, fontSize: 12 * k }}>{sub}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={{ color: Colors.textSecondary, fontSize: 13 * k, marginTop: 8 }}>Toque para abrir · segure para favoritar</Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity disabled={!mudou} testID="ajustes-tamanho-aplicar" onPress={async () => {
+              setAplicado(rascunho);
+              // A tela é recriada para valer o tamanho novo: ao voltar, abre aqui de novo.
+              await AsyncStorage.setItem('saimo-reabrir-ajustes', 'aparencia').catch(() => {});
+              nativo.definir(rascunho);
+            }}
+            style={[styles.pilula, styles.pilulaOn, !mudou && { opacity: 0.4 }]}>
+            <Text style={[styles.settingLabel, { color: '#fff', fontWeight: '700' }]}>Aplicar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity disabled={!mudou} onPress={() => setRascunho(aplicado)} style={[styles.pilula, !mudou && { opacity: 0.4 }]}>
+            <Text style={styles.settingLabel}>Desfazer</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </>
+  );
+}
+
 function AjustesConteudo() {
+  const [grupo, setGrupo] = useState<IdGrupo | null>(null);
+  const rolagem = useRef<ScrollView>(null);
+  // Cada grupo abre do topo.
+  React.useEffect(() => { rolagem.current?.scrollTo({ y: 0, animated: false }); }, [grupo]);
+  // Voltando de "Aplicar" no tamanho do texto (a tela foi recriada): reabre o grupo.
+  React.useEffect(() => {
+    AsyncStorage.getItem('saimo-reabrir-ajustes').then((g) => {
+      if (!g) return;
+      void AsyncStorage.removeItem('saimo-reabrir-ajustes');
+      setGrupo(g as IdGrupo);
+    }).catch(() => {});
+  }, []);
+  const g = GRUPOS.find((x) => x.id === grupo && (!x.semKids || !kidsAtivo())) ?? null;
+  // O voltar do celular dentro de um grupo volta à lista de grupos.
+  useFocusEffect(useCallback(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!grupo) return false;
+      setGrupo(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [grupo]));
   const [contaLogada, setContaLogada] = useState(!!estadoConta().token);
   React.useEffect(() => aoMudarConta((e) => setContaLogada(!!e.token)), []);
   const brilhoApp = useBrilhoStore((s) => s.brilho);
@@ -212,317 +317,332 @@ function AjustesConteudo() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Ajustes</Text>
-        <Text style={styles.subtitle}>Configurações do app</Text>
+      <View style={[styles.header, g && { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+        {g && (
+          <TouchableOpacity onPress={() => setGrupo(null)} accessibilityLabel="Voltar aos ajustes" testID="ajustes-voltar" hitSlop={12}>
+            <Ionicons name="arrow-back" size={26} color={Colors.text} />
+          </TouchableOpacity>
+        )}
+        <View style={g ? { flex: 1 } : undefined}>
+          <Text style={styles.title}>{g ? g.nome : 'Ajustes'}</Text>
+          {!g && <Text style={styles.subtitle}>Configurações do app</Text>}
+        </View>
       </View>
 
-      <ScrollView 
+      <ScrollView
+        ref={rolagem}
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Conta Saimo (opcional): primeira opção; em destaque enquanto não há conta. */}
-        {!kidsAtivo() && (
-          <View style={contaLogada ? undefined : styles.contaDestaque}>
-            <Text style={styles.sectionTitle}>Conta Saimo</Text>
-            <ContaSaimo />
-          </View>
-        )}
-
-        {/* Apoie */}
-        {Platform.OS !== 'ios' && (
-        <TouchableOpacity onPress={() => router.push('/apoie' as any)} activeOpacity={0.85} accessibilityRole="button">
-          <LinearGradient colors={['#0FA89A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.apoie}>
-            <Ionicons name="heart" size={26} color="#FFFFFF" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.apoieTitulo}>Apoie o Saimo TV</Text>
-              <Text style={styles.apoieTexto}>Ajude a manter tudo grátis e sem anúncios</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-        )}
-
-        {/* Perfis */}
-        <Text style={styles.sectionTitle}>Perfis</Text>
-        <View style={styles.section}>
-          <TouchableOpacity style={styles.settingRow} onPress={() => router.push('/perfis' as any)} testID="ajustes-perfis">
-            <View style={styles.settingInfo}>
-              <AvatarPerfil perfil={ativo()} tamanho={36} />
+        {!g && (<>
+          {/* Apoie */}
+          {Platform.OS !== 'ios' && (
+          <TouchableOpacity onPress={() => router.push('/apoie' as any)} activeOpacity={0.85} accessibilityRole="button">
+            <LinearGradient colors={['#0FA89A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.apoie}>
+              <Ionicons name="heart" size={26} color="#FFFFFF" />
               <View style={{ flex: 1 }}>
-                <Text style={styles.settingLabel}>{ativo().nome}{ativo().kids ? ' (Kids)' : ''}</Text>
-                <Text style={styles.linkValor}>{listaPerfis().length === 1 ? 'Único perfil · toque para trocar ou criar' : `${listaPerfis().length} perfis · toque para trocar`}</Text>
+                <Text style={styles.apoieTitulo}>Apoie o Saimo TV</Text>
+                <Text style={styles.apoieTexto}>Ajude a manter tudo grátis e sem anúncios</Text>
               </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+            </LinearGradient>
           </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.settingRow} onPress={() => router.push('/perfis?modo=gerenciar' as any)} testID="ajustes-perfis-gerenciar">
-            <View style={styles.settingInfo}>
-              <Ionicons name="people-outline" size={22} color={Colors.primary} />
-              <Text style={styles.settingLabel}>Gerenciar perfis, avatares e Kids</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Listas */}
-        <Text style={styles.sectionTitle}>Listas</Text>
-        <View style={styles.section}>
-          <TouchableOpacity style={styles.settingRow} onPress={() => setListasVisivel(true)} testID="ajustes-listas-canais">
-            <View style={styles.settingInfo}>
-              <Ionicons name="tv-outline" size={22} color={Colors.primary} />
+          )}
+          {GRUPOS.filter((x) => !x.semKids || !kidsAtivo()).map((x) => (
+            <TouchableOpacity key={x.id} testID={`ajustes-grupo-${x.id}`} onPress={() => setGrupo(x.id)}
+              style={[styles.grupo, x.id === 'conta' && !contaLogada && styles.contaDestaque]} accessibilityRole="button">
+              <Ionicons name={x.icone} size={26} color={Colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.settingLabel}>Lista de canais</Text>
-                <Text style={styles.linkValor} numberOfLines={1}>{linkCanais || 'Não informado'}</Text>
+                <Text style={styles.settingLabel}>{x.nome}</Text>
+                <Text style={styles.linkValor}>{x.id === 'conta' && contaLogada ? 'Conectada: tudo guardado na sua conta' : x.sobre}</Text>
               </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity style={styles.settingRow} onPress={() => setListasVisivel(true)} testID="ajustes-listas-filmes">
-            <View style={styles.settingInfo}>
-              <Ionicons name="film-outline" size={22} color={Colors.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.settingLabel}>Lista de filmes e séries</Text>
-                <Text style={styles.linkValor} numberOfLines={1}>{linkFilmes || 'Não informado'}</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        <MinhasListas />
-
-        <AparenciaAjustes />
-        <LegendasAjustes />
-        <NovosEpisodiosAjustes />
-        <EstatisticasAjustes />
-
-        {/* Interface */}
-        <Text style={styles.sectionTitle}>Interface</Text>
-        <View style={styles.section}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Ionicons name="tv-outline" size={22} color={Colors.primary} />
-              <Text style={styles.settingLabel}>Mostrar EPG</Text>
-            </View>
-            <Switch
-              value={showEPG}
-              onValueChange={setShowEPG}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Colors.text}
-            />
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          ))}
+          {/* App Info */}
+          <View style={styles.appInfo}>
+            <TouchableOpacity onPress={handleSecretTap} activeOpacity={1}>
+              <Text style={styles.appName}>Saimo TV</Text>
+            </TouchableOpacity>
+            <Text style={styles.appVersion}>Versão {Constants.expoConfig?.version ?? ''}</Text>
           </View>
-          
-          <View style={styles.divider} />
-          
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Ionicons name="list-outline" size={22} color={Colors.primary} />
-              <Text style={styles.settingLabel}>Número do canal</Text>
-            </View>
-            <Switch
-              value={showChannelNumber}
-              onValueChange={setShowChannelNumber}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Colors.text}
-            />
-          </View>
-          
-          <View style={styles.divider} />
-          
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Ionicons name="play-outline" size={22} color={Colors.primary} />
-              <Text style={styles.settingLabel}>Reproduzir automaticamente</Text>
-            </View>
-            <Switch
-              value={autoplay}
-              onValueChange={setAutoplay}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Colors.text}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity style={styles.settingRow} onPress={handleCycleUpscaling}>
-            <View style={styles.settingInfo}>
-              <Ionicons name="sparkles-outline" size={22} color={Colors.primary} />
-              <View>
-                <Text style={styles.settingLabel}>Super Resolução (Upscaling)</Text>
-                <Text style={{ color: Colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {upscalingLabel}
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Ionicons name="volume-medium-outline" size={22} color={Colors.primary} />
-              <View>
-                <Text style={styles.settingLabel}>Áudio Inteligente</Text>
-                <Text style={{ color: Colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  Nivela o volume entre canais e fontes diferentes
-                </Text>
-              </View>
-            </View>
-            <Switch
-              value={audioInteligente}
-              onValueChange={setAudioInteligente}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Colors.text}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity style={styles.settingRow} onPress={handleCycleZeroDelay}>
-            <View style={styles.settingInfo}>
-              <Ionicons name="flash-outline" size={22} color={Colors.primary} />
-              <View>
-                <Text style={styles.settingLabel}>Zero Delay (Ao Vivo)</Text>
-                <Text style={{ color: Colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {zeroDelayLabel}
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Dados */}
-        <Text style={styles.sectionTitle}>Dados</Text>
-        <View style={styles.section}>
-          <TouchableOpacity style={styles.settingRow} onPress={handleClearCache}>
-            <View style={styles.settingInfo}>
-              <Ionicons name="refresh-outline" size={22} color={Colors.primary} />
-              <Text style={styles.settingLabel}>Recarregar Guia de TV</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-          
-          <View style={styles.divider} />
-          
-          <TouchableOpacity style={styles.settingRow} onPress={handleClearFavorites}>
-            <View style={styles.settingInfo}>
-              <Ionicons name="heart-dislike-outline" size={22} color={Colors.error} />
-              <Text style={styles.settingLabel}>Remover todos favoritos</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-          
-          <View style={styles.divider} />
-          
-          <TouchableOpacity style={styles.settingRow} onPress={handleClearMediaCache}>
-            <View style={styles.settingInfo}>
-              <Ionicons name="trash-outline" size={22} color={Colors.error} />
-              <Text style={styles.settingLabel}>Limpar Cache de Mídia</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Brilho do app (não o do aparelho): 0 escurece tudo; um toque volta. */}
-        <Text style={styles.sectionTitle}>Tela</Text>
-        <View style={styles.section}>
-          <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
-            <View style={[styles.settingInfo, { justifyContent: 'space-between' }]}>
+        </>)}
+        {g?.id === 'conta' && (<>
+          <ContaSaimo />
+        </>)}
+        {g?.id === 'listas' && (<>
+          {/* Listas */}
+          <Text style={styles.sectionTitle}>Listas</Text>
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.settingRow} onPress={() => setListasVisivel(true)} testID="ajustes-listas-canais">
               <View style={styles.settingInfo}>
-                <Ionicons name="sunny-outline" size={22} color={Colors.primary} />
-                <Text style={styles.settingLabel}>Brilho do app</Text>
+                <Ionicons name="tv-outline" size={22} color={Colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingLabel}>Lista de canais</Text>
+                  <Text style={styles.linkValor} numberOfLines={1}>{linkCanais || 'Não informado'}</Text>
+                </View>
               </View>
-              <Text style={styles.settingLabel}>{brilhoApp}%</Text>
-            </View>
-            <Slider
-              minimumValue={0}
-              maximumValue={100}
-              step={5}
-              value={brilhoApp}
-              onSlidingComplete={definirBrilho}
-              minimumTrackTintColor={Colors.primary}
-              maximumTrackTintColor="rgba(255,255,255,0.2)"
-              thumbTintColor="#fff"
-              testID="ajustes-brilho"
-            />
-            <Text style={{ color: Colors.textMuted, fontSize: 12 }}>
-              Em 0% a tela fica preta: toque em qualquer lugar para voltar ao normal.
-            </Text>
-          </View>
-        </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
 
-        {/* Atualizações */}
-        <Text style={styles.sectionTitle}>Atualizações</Text>
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.settingRow} onPress={() => setListasVisivel(true)} testID="ajustes-listas-filmes">
+              <View style={styles.settingInfo}>
+                <Ionicons name="film-outline" size={22} color={Colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingLabel}>Lista de filmes e séries</Text>
+                  <Text style={styles.linkValor} numberOfLines={1}>{linkFilmes || 'Não informado'}</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <MinhasListas />
+          <MinhasListas />
+        </>)}
+        {g?.id === 'reproducao' && (<>
+          {/* Interface */}
+          <Text style={styles.sectionTitle}>Ao vivo e player</Text>
+          <View style={styles.section}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="tv-outline" size={22} color={Colors.primary} />
+                <Text style={styles.settingLabel}>Mostrar EPG</Text>
+              </View>
+              <Switch
+                value={showEPG}
+                onValueChange={setShowEPG}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.text}
+              />
+            </View>
+          
+            <View style={styles.divider} />
+          
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="list-outline" size={22} color={Colors.primary} />
+                <Text style={styles.settingLabel}>Número do canal</Text>
+              </View>
+              <Switch
+                value={showChannelNumber}
+                onValueChange={setShowChannelNumber}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.text}
+              />
+            </View>
+          
+            <View style={styles.divider} />
+          
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="play-outline" size={22} color={Colors.primary} />
+                <Text style={styles.settingLabel}>Reproduzir automaticamente</Text>
+              </View>
+              <Switch
+                value={autoplay}
+                onValueChange={setAutoplay}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.text}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.settingRow} onPress={handleCycleUpscaling}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="sparkles-outline" size={22} color={Colors.primary} />
+                <View>
+                  <Text style={styles.settingLabel}>Super Resolução (Upscaling)</Text>
+                  <Text style={{ color: Colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                    {upscalingLabel}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="volume-medium-outline" size={22} color={Colors.primary} />
+                <View>
+                  <Text style={styles.settingLabel}>Áudio Inteligente</Text>
+                  <Text style={{ color: Colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                    Nivela o volume entre canais e fontes diferentes
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={audioInteligente}
+                onValueChange={setAudioInteligente}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.text}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.settingRow} onPress={handleCycleZeroDelay}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="flash-outline" size={22} color={Colors.primary} />
+                <View>
+                  <Text style={styles.settingLabel}>Zero Delay (Ao Vivo)</Text>
+                  <Text style={{ color: Colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                    {zeroDelayLabel}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </>)}
+        {g?.id === 'legendas' && <LegendasAjustes />}
+        {g?.id === 'aparencia' && (<>
+          <TamanhoDoTexto />
+          <AparenciaAjustes />
+          {/* Brilho do app (não o do aparelho): 0 escurece tudo; um toque volta. */}
+          <Text style={styles.sectionTitle}>Tela</Text>
+          <View style={styles.section}>
+            <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+              <View style={[styles.settingInfo, { justifyContent: 'space-between' }]}>
+                <View style={styles.settingInfo}>
+                  <Ionicons name="sunny-outline" size={22} color={Colors.primary} />
+                  <Text style={styles.settingLabel}>Brilho do app</Text>
+                </View>
+                <Text style={styles.settingLabel}>{brilhoApp}%</Text>
+              </View>
+              <Slider
+                minimumValue={0}
+                maximumValue={100}
+                step={5}
+                value={brilhoApp}
+                onSlidingComplete={definirBrilho}
+                minimumTrackTintColor={Colors.primary}
+                maximumTrackTintColor="rgba(255,255,255,0.2)"
+                thumbTintColor="#fff"
+                testID="ajustes-brilho"
+              />
+              <Text style={{ color: Colors.textMuted, fontSize: 12 }}>
+                Em 0% a tela fica preta: toque em qualquer lugar para voltar ao normal.
+              </Text>
+            </View>
+          </View>
+        </>)}
+        {g?.id === 'perfis' && (<>
+          {/* Perfis */}
+          <Text style={styles.sectionTitle}>Perfis</Text>
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.settingRow} onPress={() => router.push('/perfis' as any)} testID="ajustes-perfis">
+              <View style={styles.settingInfo}>
+                <AvatarPerfil perfil={ativo()} tamanho={36} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingLabel}>{ativo().nome}{ativo().kids ? ' (Kids)' : ''}</Text>
+                  <Text style={styles.linkValor}>{listaPerfis().length === 1 ? 'Único perfil · toque para trocar ou criar' : `${listaPerfis().length} perfis · toque para trocar`}</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.settingRow} onPress={() => router.push('/perfis?modo=gerenciar' as any)} testID="ajustes-perfis-gerenciar">
+              <View style={styles.settingInfo}>
+                <Ionicons name="people-outline" size={22} color={Colors.primary} />
+                <Text style={styles.settingLabel}>Gerenciar perfis, avatares e Kids</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <NovosEpisodiosAjustes />
+          <EstatisticasAjustes />
+          {/* Dados */}
+          <Text style={styles.sectionTitle}>Dados</Text>
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.settingRow} onPress={handleClearCache}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="refresh-outline" size={22} color={Colors.primary} />
+                <Text style={styles.settingLabel}>Recarregar Guia de TV</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          
+            <View style={styles.divider} />
+          
+            <TouchableOpacity style={styles.settingRow} onPress={handleClearFavorites}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="heart-dislike-outline" size={22} color={Colors.error} />
+                <Text style={styles.settingLabel}>Remover todos favoritos</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          
+            <View style={styles.divider} />
+          
+            <TouchableOpacity style={styles.settingRow} onPress={handleClearMediaCache}>
+              <View style={styles.settingInfo}>
+                <Ionicons name="trash-outline" size={22} color={Colors.error} />
+                <Text style={styles.settingLabel}>Limpar Cache de Mídia</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </>)}
+        {g?.id === 'sistema' && (<>
+          {/* Atualizações */}
+          <Text style={styles.sectionTitle}>Atualizações</Text>
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.settingRow}
+              disabled={verificando}
+              onPress={async () => {
+                setVerificando(true);
+                const r = await verificarAtualizacaoAgora();
+                setVerificando(false);
+                if (r === 'atual') {
+                  Alert.alert('Saimo TV', `Você já está na versão mais recente (${Constants.expoConfig?.version ?? ''}).`);
+                } else if (r === 'erro') {
+                  Alert.alert('Saimo TV', 'Não foi possível verificar agora. Confira a internet e tente de novo.');
+                }
+                // 'nova': o aviso de atualização abre sozinho.
+              }}
+              testID="ajustes-verificar-atualizacoes"
+            >
+              <View style={styles.settingInfo}>
+                <Ionicons name="cloud-download-outline" size={22} color={Colors.primary} />
+                <Text style={styles.settingLabel}>Verificar atualizações</Text>
+              </View>
+              {verificando
+                ? <ActivityIndicator size="small" color={Colors.primary} />
+                : <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />}
+            </TouchableOpacity>
+          </View>
+        </>)}
+        {g?.id === 'parental' && (<>
         <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.settingRow}
-            disabled={verificando}
-            onPress={async () => {
-              setVerificando(true);
-              const r = await verificarAtualizacaoAgora();
-              setVerificando(false);
-              if (r === 'atual') {
-                Alert.alert('Saimo TV', `Você já está na versão mais recente (${Constants.expoConfig?.version ?? ''}).`);
-              } else if (r === 'erro') {
-                Alert.alert('Saimo TV', 'Não foi possível verificar agora. Confira a internet e tente de novo.');
-              }
-              // 'nova': o aviso de atualização abre sozinho.
-            }}
-            testID="ajustes-verificar-atualizacoes"
-          >
+          <TouchableOpacity style={styles.settingRow} onPress={adultUnlocked ? handleLockAdult : handleUnlockAdult} testID="ajustes-parental">
             <View style={styles.settingInfo}>
-              <Ionicons name="cloud-download-outline" size={22} color={Colors.primary} />
-              <Text style={styles.settingLabel}>Verificar atualizações</Text>
+              <Ionicons name={adultUnlocked ? 'lock-open-outline' : 'lock-closed-outline'} size={20} color={Colors.textSecondary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.settingLabel}>Conteúdo adulto</Text>
+                <Text style={styles.linkValor}>{adultUnlocked ? 'Liberado · toque para bloquear' : 'Bloqueado · toque para liberar com a senha'}</Text>
+              </View>
             </View>
-            {verificando
-              ? <ActivityIndicator size="small" color={Colors.primary} />
-              : <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />}
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <TouchableOpacity style={styles.settingRow} onPress={() => { setPinAction('change'); setPinMode('change'); setPinModalVisible(true); }} testID="ajustes-parental-senha">
+            <View style={styles.settingInfo}>
+              <Ionicons name="key-outline" size={20} color={Colors.textSecondary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.settingLabel}>Trocar a senha</Text>
+                <Text style={styles.linkValor}>Troque a senha de fábrica por uma sua</Text>
+              </View>
+            </View>
           </TouchableOpacity>
         </View>
-
-        {/* Controle parental: no fim, separado e discreto. No Kids não aparece. */}
-        {!kidsAtivo() && (
-          <View style={{ opacity: 0.7, marginTop: 18 }}>
-            <Text style={styles.sectionTitle}>Controle parental</Text>
-            <View style={styles.section}>
-              <TouchableOpacity style={styles.settingRow} onPress={adultUnlocked ? handleLockAdult : handleUnlockAdult} testID="ajustes-parental">
-                <View style={styles.settingInfo}>
-                  <Ionicons name={adultUnlocked ? 'lock-open-outline' : 'lock-closed-outline'} size={20} color={Colors.textSecondary} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.settingLabel}>Conteúdo adulto</Text>
-                    <Text style={styles.linkValor}>{adultUnlocked ? 'Liberado · toque para bloquear' : 'Bloqueado · toque para liberar com a senha'}</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-              <View style={styles.divider} />
-              <TouchableOpacity style={styles.settingRow} onPress={() => { setPinAction('change'); setPinMode('change'); setPinModalVisible(true); }} testID="ajustes-parental-senha">
-                <View style={styles.settingInfo}>
-                  <Ionicons name="key-outline" size={20} color={Colors.textSecondary} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.settingLabel}>Trocar a senha</Text>
-                    <Text style={styles.linkValor}>Troque a senha de fábrica por uma sua</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* App Info */}
-        <View style={styles.appInfo}>
-          <TouchableOpacity onPress={handleSecretTap} activeOpacity={1}>
-            <Text style={styles.appName}>Saimo TV</Text>
-          </TouchableOpacity>
-          <Text style={styles.appVersion}>Versão {Constants.expoConfig?.version ?? ''}</Text>
-        </View>
+        </>)}
       </ScrollView>
 
       <ListasModal visible={listasVisivel} onClose={() => setListasVisivel(false)} />
@@ -546,7 +666,11 @@ function AjustesConteudo() {
 }
 
 const styles = StyleSheet.create({
-  contaDestaque: { borderWidth: 2, borderColor: Colors.primary, borderRadius: 20, padding: 8, marginBottom: 12 },
+  contaDestaque: { borderWidth: 2, borderColor: Colors.primary },
+  grupo: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 16, marginTop: 10, backgroundColor: Colors.cardBg },
+  pilula: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)' },
+  pilulaOn: { backgroundColor: Colors.primary },
+  previa: { padding: 12, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'rgba(0,0,0,0.3)', overflow: 'hidden' },
   apoie: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, marginBottom: 8 },
   apoieTitulo: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   apoieTexto: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },
