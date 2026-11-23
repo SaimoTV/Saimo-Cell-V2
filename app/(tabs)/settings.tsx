@@ -33,6 +33,8 @@ import MinhasListas from '../../components/MinhasListas';
 import ContaSaimo from '../../components/ContaSaimo';
 import { aoMudarConta, estadoConta } from '../../services/conta';
 import ListasModal from '../../components/ListasModal';
+import AddonsModal from '../../components/AddonsModal';
+import { getAddons, temAddonAtivo, aoMudarAddons } from '../../services/addons';
 import { verificarAtualizacaoAgora } from '../../services/atualizacao';
 import { useFocusEffect } from 'expo-router';
 import { assinarPerfis, ativo, kidsAtivo, pedeCodigo, perfis as listaPerfis } from '../../services/perfis';
@@ -65,7 +67,7 @@ type IdGrupo = 'conta' | 'listas' | 'reproducao' | 'legendas' | 'aparencia' | 'p
 /** Os grupos dos Ajustes: a tela abre com a lista deles e cada um mostra só os seus ajustes. */
 const GRUPOS: { id: IdGrupo; nome: string; sobre: string; icone: React.ComponentProps<typeof Ionicons>['name']; semKids?: boolean }[] = [
   { id: 'conta', nome: 'Conta Saimo', sobre: 'Perfis, listas e favoritos em todos os aparelhos', icone: 'person-circle-outline', semKids: true },
-  { id: 'listas', nome: 'Listas e conteúdo', sobre: 'Lista de canais, de filmes e Minhas listas', icone: 'list-outline' },
+  { id: 'listas', nome: 'Listas e conteúdo', sobre: 'Lista de canais, de filmes, Minhas listas e Addons', icone: 'list-outline' },
   { id: 'reproducao', nome: 'Ao vivo e player', sobre: 'Guia, número do canal, nitidez, volume e atraso', icone: 'play-circle-outline' },
   { id: 'legendas', nome: 'Legendas', sobre: 'Tamanho, cor, fundo e posição', icone: 'text-outline' },
   { id: 'aparencia', nome: 'Aparência e acessibilidade', sobre: 'Tamanho do texto, cores e brilho', icone: 'accessibility-outline' },
@@ -218,6 +220,9 @@ function AjustesConteudo() {
   const linkCanais = useLinksStore(s => s.linkCanais);
   const linkFilmes = useLinksStore(s => s.linkFilmes);
   const [listasVisivel, setListasVisivel] = useState(false);
+  const [addonsVisivel, setAddonsVisivel] = useState(false);
+  const [, refazerAddons] = useState(0);
+  React.useEffect(() => aoMudarAddons(() => refazerAddons((n) => n + 1)), []);
 
   const [pinAction, setPinAction] = useState<'change' | 'unlock'>('change');
 
@@ -401,7 +406,22 @@ function AjustesConteudo() {
           </View>
 
           <MinhasListas />
-          <MinhasListas />
+
+          <Text style={styles.sectionTitle}>Addons</Text>
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.settingRow} onPress={() => setAddonsVisivel(true)} testID="ajustes-addons">
+              <View style={styles.settingInfo}>
+                <Ionicons name="extension-puzzle-outline" size={22} color={Colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingLabel}>Addons e Debrid</Text>
+                  <Text style={styles.linkValor} numberOfLines={1}>
+                    {getAddons().length === 0 ? 'Nenhum instalado' : `${getAddons().length} instalado(s)${temAddonAtivo() ? '' : ' · desligados'}`}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
         </>)}
         {g?.id === 'reproducao' && (<>
           {/* Interface */}
@@ -646,6 +666,7 @@ function AjustesConteudo() {
       </ScrollView>
 
       <ListasModal visible={listasVisivel} onClose={() => setListasVisivel(false)} />
+      <AddonsModal visible={addonsVisivel} onClose={() => setAddonsVisivel(false)} />
 
       <PinModal
         visible={pinModalVisible}
