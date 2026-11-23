@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius } from '../constants/Colors';
 import {
-  aoMudarConta, apagarConta, aprovarTv, cadastrar, codigoDoQr, entrarComSenha, estadoConta, sair, sincronizar, trocarSenha,
+  aoMudarConta, apagarConta, aprovarTv, cadastrar, codigoDoQr, definirSenha, entrarComSenha, estadoConta, pedirCodigo, sair, sincronizar, trocarSenha,
 } from '../services/conta';
 
 function haQuanto(ms: number): string {
@@ -25,6 +25,7 @@ export function Entrar() {
   const [senha, setSenha] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [aviso, setAviso] = useState('');
+  const [recuperando, setRecuperando] = useState(false);
   const pronto = email.includes('@') && (criando ? senha.length >= 8 : senha.length > 0);
   const enviar = async () => {
     setOcupado(true);
@@ -49,8 +50,60 @@ export function Entrar() {
       <TouchableOpacity onPress={() => { setCriando(!criando); setAviso(''); setSenha(''); }} testID="conta-alternar">
         <Text style={styles.link}>{criando ? 'Já tenho conta: entrar' : 'Não tenho conta: criar'}</Text>
       </TouchableOpacity>
-      {!criando && <Text style={styles.texto}>Esqueceu a senha? Num aparelho onde a conta já está aberta, use Trocar a senha.</Text>}
+      {!criando && !recuperando && (
+        <TouchableOpacity onPress={() => setRecuperando(true)} testID="conta-esqueci">
+          <Text style={styles.link}>Esqueci a senha</Text>
+        </TouchableOpacity>
+      )}
+      {recuperando && <RecuperarSenha emailInicial={email} aoFechar={() => setRecuperando(false)} />}
       {!!aviso && <Text style={styles.erro}>{aviso}</Text>}
+    </View>
+  );
+}
+
+/** Esqueci a senha: código no e-mail da conta, senha nova e já entra. */
+function RecuperarSenha({ emailInicial, aoFechar }: { emailInicial: string; aoFechar: () => void }) {
+  const [email, setEmail] = useState(emailInicial);
+  const [enviado, setEnviado] = useState(false);
+  const [codigo, setCodigo] = useState('');
+  const [senha, setSenha] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const [aviso, setAviso] = useState('');
+  const pedir = async () => {
+    setOcupado(true); setAviso('');
+    try { await pedirCodigo(email); setEnviado(true); setAviso('Enviamos um código de 6 números para o seu e-mail (veja também o spam).'); }
+    catch (e) { setAviso(e instanceof Error ? e.message : 'Não deu certo'); }
+    finally { setOcupado(false); }
+  };
+  const trocar = async () => {
+    setOcupado(true); setAviso('');
+    try { await definirSenha(email, codigo, senha); aoFechar(); }
+    catch (e) { setAviso(e instanceof Error ? e.message : 'Não deu certo'); }
+    finally { setOcupado(false); }
+  };
+  return (
+    <View testID="conta-recuperar">
+      <Text style={[styles.texto, { fontWeight: '700', color: '#fff' }]}>Criar uma senha nova</Text>
+      <TextInput style={styles.campo} placeholder="E-mail da conta" placeholderTextColor={Colors.textMuted} autoCapitalize="none"
+        keyboardType="email-address" autoComplete="email" value={email} onChangeText={setEmail} editable={!enviado} />
+      {enviado && (
+        <>
+          <TextInput style={styles.campo} placeholder="Código do e-mail" placeholderTextColor={Colors.textMuted} keyboardType="number-pad"
+            autoComplete="one-time-code" value={codigo} onChangeText={(v) => setCodigo(v.replace(/\D/g, '').slice(0, 6))} testID="conta-codigo" />
+          <TextInput style={styles.campo} placeholder="Senha nova (8 ou mais)" placeholderTextColor={Colors.textMuted} secureTextEntry
+            autoCapitalize="none" autoComplete="password-new" value={senha} onChangeText={setSenha} />
+        </>
+      )}
+      <TouchableOpacity style={styles.botao} testID="conta-recuperar-acao"
+        disabled={ocupado || (!enviado ? !email.includes('@') : codigo.length < 6 || senha.length < 8)}
+        onPress={() => void (enviado ? trocar() : pedir())}>
+        {ocupado ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoTexto}>{enviado ? 'Salvar e entrar' : 'Enviar código'}</Text>}
+      </TouchableOpacity>
+      {enviado && (
+        <TouchableOpacity onPress={() => void pedir()} disabled={ocupado}><Text style={styles.link}>Mandar outro código</Text></TouchableOpacity>
+      )}
+      <TouchableOpacity onPress={aoFechar}><Text style={styles.link}>Cancelar</Text></TouchableOpacity>
+      {!!aviso && <Text style={styles.texto}>{aviso}</Text>}
     </View>
   );
 }
