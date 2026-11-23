@@ -261,3 +261,7 @@ Remoções (3.3.3): o que sai do Continue assistindo, dos favoritos e das Minhas
 ## Ajustes da 3.3.4
 
 - **On Demand com cache**: as fileiras abrem com a cópia guardada (`loadDestaques(false, true)`) e a novidade é conferida por trás ao abrir e a cada volta à aba (no máximo 1x por minuto); só troca se mudou.
+
+## Licença
+
+Código aberto sob a licença MIT (arquivo `LICENSE`). Bibliotecas de terceiros seguem as licenças delas.
