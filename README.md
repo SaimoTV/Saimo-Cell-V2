@@ -157,6 +157,10 @@ nem o endereço.
 - Versão mostrada em Ajustes e usada pelo atualizador lida do próprio app
   (`app.json`)
 
+## Ajustes e acessibilidade
+
+`app/(tabs)/settings.tsx` abre com os grupos; o voltar do aparelho volta à lista. Tamanho do texto com prévia (Normal a Enorme): o módulo nativo `SaimoTamanho` guarda a escala e recria a Activity com o fontScale multiplicado (`MainActivity.attachBaseContext`); o app volta ao grupo depois de aplicar.
+
 ## Rodar
 
 ```bash
