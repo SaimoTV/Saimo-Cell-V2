@@ -1,5 +1,5 @@
 import * as Network from 'expo-network';
-import { AppState, PermissionsAndroid, Platform } from 'react-native';
+import { Alert, AppState, PermissionsAndroid, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as IntentLauncher from 'expo-intent-launcher';
 import Constants from 'expo-constants';
@@ -14,6 +14,7 @@ import { aoMudar as aoMudarListas, getListas } from './minhasListas';
 import { aoMudarAddons, carregarAddons, exportarAddonsParaSync } from './addons';
 import { aoMudarDebrid, carregarDebridConfig, exportarDebridParaSync } from './debrid';
 import { useMediaStore } from '../stores/mediaStore';
+import { abrirTvReversa, marcaDaTv } from './connectReverso';
 import { useFavoritesStore } from '../stores/favoritesStore';
 
 const CONNECT_CHANNEL_ID = 'saimo-connect-channel';
@@ -352,7 +353,7 @@ class SaimoConnectService {
           // Se autoConnect estiver ligado e não estiver conectado, conecta na hora!
           // Sozinho, só volta para a última TV; as outras ficam na lista para escolher.
           if (this.autoConnect && !this.isConnected() && !this.userExplicitlyDisconnected &&
-              this.ehUltimaTv(ok)) {
+              this.ehUltimaTv(ok) && !ok.marca) {
             this.connect(ok.ip);
             return foundTvs;
           }
@@ -365,6 +366,7 @@ class SaimoConnectService {
 
       // 2. Descobre sub-redes candidatas (trata IPv4, IPv6 e roteadores comuns)
       const localIp = await Network.getIpAddressAsync().catch(() => null);
+      if (localIp) this.ipDoCelular = localIp;
       const subnets = getCandidateSubnets(localIp, this.lastKnownIp, known);
 
       for (const subnet of subnets) {
@@ -396,7 +398,7 @@ class SaimoConnectService {
               useConnectStore.getState().addDiscoveredTv(r);
               // Sozinho, conecta na última TV usada (mesmo que tenha trocado de IP)
               // ou, se nunca conectou, na primeira que responder.
-              if (this.autoConnect && !this.isConnected() && !this.userExplicitlyDisconnected && this.ehUltimaTv(r)) {
+              if (this.autoConnect && !this.isConnected() && !this.userExplicitlyDisconnected && this.ehUltimaTv(r) && !r.marca) {
                 this.connect(r.ip);
                 break;
               }
@@ -451,6 +453,20 @@ class SaimoConnectService {
     } catch (_e) {
       clearTimeout(timer);
     }
+    // Sem o Saimo respondendo na 8999: pode ser uma TV Samsung ou LG.
+    const tvMarca = await marcaDaTv(ip, timeoutMs).catch(() => null);
+    if (tvMarca) {
+      const tv: DiscoveredTv = {
+        id: `${tvMarca.marca}-${ip}`,
+        name: tvMarca.nome,
+        ip,
+        port: 8999,
+        lastSeen: Date.now(),
+        marca: tvMarca.marca,
+      };
+      useConnectStore.getState().addDiscoveredTv(tv);
+      return tv;
+    }
     return null;
   }
 
@@ -497,7 +513,9 @@ class SaimoConnectService {
 
     const wsUrl = `ws://${ip}:8999/ws`;
     try {
-      const ws = new WebSocket(wsUrl);
+      // TV Samsung ou LG: o celular abre o Saimo nela e ela se liga aqui.
+      const marca = useConnectStore.getState().discoveredTvs.find((t) => t.ip === ip)?.marca;
+      const ws = marca ? this.abrirReversa(ip, marca) : new WebSocket(wsUrl);
       this.ws = ws;
 
       ws.onopen = () => {
@@ -542,6 +560,25 @@ class SaimoConnectService {
     }
   }
 
+  /** Connect invertido (Samsung e LG): devolve um socket que abre quando a TV ligar. */
+  private abrirReversa(ip: string, marca: 'lg' | 'samsung'): WebSocket {
+    const s = abrirTvReversa(ip, marca, this.ipDoCelular ?? '', (motivo) => {
+      console.warn('[Connect] TV', marca, ip, motivo);
+      if (this.ws !== (s as unknown as WebSocket)) return;
+      const nome = marca === 'lg' ? 'LG' : 'Samsung';
+      Alert.alert(
+        `Não deu para abrir o Saimo na TV ${nome}`,
+        `${motivo}.\n\nConfira: o Saimo instalado na TV, celular e TV no mesmo Wi-Fi e o controle pelo celular ligado na TV (` +
+          (marca === 'lg' ? 'Configurações > Geral > Dispositivos > "LG Connect Apps"' : 'Configurações > Geral > Gerenciador de dispositivos externos > "Acesso por dispositivo"') +
+          '). Na primeira vez, aceite o aviso na tela da TV.',
+      );
+      s.close();
+    });
+    return s as unknown as WebSocket;
+  }
+
+  private ipDoCelular: string | null = null;
+
   private handleMessage(msg: any, ip: string): void {
     const store = useConnectStore.getState();
 
@@ -557,6 +594,9 @@ class SaimoConnectService {
           ip,
           port: 8999,
           lastSeen: Date.now(),
+          // Samsung e LG: continua sabendo que é preciso abrir o Saimo nela.
+          marca: useConnectStore.getState().discoveredTvs.find((t) => t.ip === ip)?.marca
+            ?? (msg.tv?.plataforma === 'webos' ? 'lg' : msg.tv?.plataforma === 'tizen' ? 'samsung' : undefined),
         };
         store.addDiscoveredTv(tvObj);
         store.setConnectedTv(tvObj);
@@ -689,7 +729,10 @@ class SaimoConnectService {
     useConnectStore.getState().setStatus('disconnected');
     useConnectStore.getState().setPendingPin(null);
 
-    if (!this.userExplicitlyDisconnected && this.autoConnect) {
+    // Samsung e LG: reconectar sozinho reabriria o Saimo na TV a cada queda;
+    // a pessoa toca em Conectar de novo.
+    const marca = useConnectStore.getState().discoveredTvs.find((t) => t.ip === this.currentIp)?.marca;
+    if (!this.userExplicitlyDisconnected && this.autoConnect && !marca) {
       this.scheduleReconnect();
     }
   }

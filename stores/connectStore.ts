@@ -84,6 +84,8 @@ export interface DiscoveredTv {
   port: number;
   version?: string;
   lastSeen: number;
+  /** TV Samsung ou LG: o Saimo nela se liga ao celular (Connect invertido). */
+  marca?: 'lg' | 'samsung';
 }
 
 export type ConnectionStatus =
@@ -164,7 +166,8 @@ export const useConnectStore = create<ConnectStoreState>((set, get) => ({
   setStatus: (status) => set({ status }),
   setDiscoveredTvs: (discoveredTvs) => set({ discoveredTvs }),
   addDiscoveredTv: (tv) => {
-    const list = get().discoveredTvs.filter((item) => item.id !== tv.id);
+    // Mesmo IP é o mesmo aparelho (a TV Samsung/LG troca o id provisório pelo dela ao ligar).
+    const list = get().discoveredTvs.filter((item) => item.id !== tv.id && item.ip !== tv.ip);
     set({ discoveredTvs: [tv, ...list] });
   },
   setConnectedTv: (connectedTv) => {

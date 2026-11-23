@@ -334,7 +334,11 @@ export default function ConnectSheet() {
                       </View>
                       <View style={styles.tvRowTexts}>
                         <Text style={styles.tvRowName}>{tv.name}</Text>
-                        <Text style={styles.tvRowIp}>IP: {tv.ip}</Text>
+                        <Text style={styles.tvRowIp}>
+                          {tv.marca
+                            ? `IP: ${tv.ip} · toque para abrir o Saimo na TV (na primeira vez, aceite na tela da TV)`
+                            : `IP: ${tv.ip}`}
+                        </Text>
                       </View>
                     </View>
 
