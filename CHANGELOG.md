@@ -2,6 +2,7 @@
 
 ## [Não publicado] — app sem listas
 
+- Canais: trocar de canal várias vezes não deixa mais o player carregando para sempre. O player antigo sai de cena antes do novo abrir (uma conexão por canal, sem o endereço novo ser enviado ao player velho) e uma fonte que não abre nem dá erro em 15 s conta como queda: tenta de novo e desce para a próxima fonte.
 - Nenhuma lista no app: sem catálogo de canais embutido (`offiline.json`), sem tabelas de guia no código (guiadetv, feeds, Pluto), sem regra de seção pelo nome. Só dois endereços de fábrica (canais-saimo.pages.dev e filmes-saimo.pages.dev), ativos sem a pessoa digitar nada; em Ajustes > Listas dá para trocar, desligar (salvar vazio) e restaurar o padrão.
 - Lista desligada: a aba mostra o estado vazio com atalho para Ajustes e nenhum pedido de rede para listas é feito.
 - Tabelas do guia vêm do `guia.txt` do endereço de canais.

@@ -68,6 +68,8 @@ interface VideoPlayerProps {
 const SEM_IMAGEM_MS = 25_000;
 /** Quantas vezes a mesma fonte é reaberta antes de descer para a seguinte. */
 const RETOMADAS_MAX = 3;
+/** Quanto tempo uma fonte pode ficar carregando sem abrir nem dar erro. */
+const CARGA_MAX_MS = 15_000;
 /**
  * Configuração de buffer otimizada para transmissões AO VIVO com baixa latência (Live Edge).
  * - minBufferMs: 2000 (apenas 2s de buffer inicial, em vez de 15s-30s que causavam atraso)
@@ -210,6 +212,9 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
   const [videoKey, setVideoKey] = useState(0);
   const [isCasting, setIsCasting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  // Durante a troca de canal o player antigo sai de cena (solta a conexão) e o
+  // novo só abre depois que o dedo parar de trocar: uma abertura por canal.
+  const [trocando, setTrocando] = useState(false);
 
   const [audioTracks, setAudioTracks] = useState<any[]>([]);
   const [videoTracks, setVideoTracks] = useState<any[]>([]);
@@ -263,10 +268,12 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
     setIsLoading(true);
     setSourceIndex(0);
     setActiveChannel(target);
+    setTrocando(true);
     switchDebounceRef.current = setTimeout(() => {
       if (!isMountedRef.current) return;
       setVideoKey(k => k + 1);
-    }, 200);
+      setTrocando(false);
+    }, 350);
   }, [activeChannel.id]);
 
   // ─── Favorite sync ───
@@ -480,6 +487,19 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
     }, 2000);
   }, [activeChannel.streams, activeChannel.name, activeStream.url, sourceIndex]);
 
+  // Carga que nunca termina nem dá erro (servidor que aceita a conexão e não
+  // responde) deixava o canal "carregando" para sempre. Passou do prazo, conta
+  // como queda: tenta de novo, depois a próxima fonte.
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  useEffect(() => {
+    if (!isLoading || trocando || hasError) return;
+    const prazo = setTimeout(() => {
+      if (isMountedRef.current) onErrorRef.current({ error: { errorString: 'sem resposta da fonte' } });
+    }, CARGA_MAX_MS);
+    return () => clearTimeout(prazo);
+  }, [isLoading, trocando, hasError, videoKey]);
+
   const onAudioTracks = useCallback((data: any) => {
     setAudioTracks(data?.audioTracks ?? []);
   }, []);
@@ -629,7 +649,7 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
         android_ripple={{ color: 'transparent' }}
       >
         <View style={styles.video} pointerEvents="none">
-          <Video
+          {!trocando && <Video
             key={videoKey}
             ref={videoRef}
             source={fonteDoPlayer}
@@ -665,7 +685,7 @@ export default function VideoPlayer({ channel }: VideoPlayerProps) {
             ignoreSilentSwitch="ignore"
             playInBackground={false}
             focusable={false}
-          />
+          />}
         </View>
 
         {(isLoading || isRetrying) && !hasError && (
