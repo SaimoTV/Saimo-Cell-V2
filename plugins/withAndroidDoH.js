@@ -42,6 +42,8 @@ module.exports = function withAndroidDoH(config) {
 import com.facebook.react.modules.network.OkHttpClientFactory
 import com.facebook.react.modules.network.OkHttpClientProvider
 import java.net.InetAddress
+import java.util.concurrent.TimeUnit
+import okhttp3.Dispatcher
 import java.util.concurrent.ConcurrentHashMap
 import okhttp3.OkHttpClient
 import okhttp3.Dns
@@ -104,8 +106,19 @@ object SaimoNetwork {
     response.newBuilder().request(originalRequest).build()
   }
 
+  // Cada nome é resolvido uma vez e guardado por 5 minutos. Sem isso, cada
+  // pedido (guia, imagens, vídeo) fazia uma consulta DoH, e o vídeo esperava
+  // na fila atrás das centenas de pedidos do guia.
+  private val cacheDns = ConcurrentHashMap<String, Pair<Long, List<InetAddress>>>()
+  private const val DNS_VALE_MS = 5 * 60 * 1000L
+
   private val dns: Dns by lazy {
-    val bootstrap = OkHttpClient.Builder().build()
+    val bootstrap = OkHttpClient.Builder()
+      .connectTimeout(4, TimeUnit.SECONDS)
+      .readTimeout(4, TimeUnit.SECONDS)
+      .callTimeout(6, TimeUnit.SECONDS)
+      .dispatcher(Dispatcher().apply { maxRequests = 64; maxRequestsPerHost = 32 })
+      .build()
     val doh = DnsOverHttps.Builder()
       .client(bootstrap)
       .url("https://1.1.1.1/dns-query".toHttpUrl())
@@ -116,8 +129,19 @@ object SaimoNetwork {
       .includeIPv6(false)
       .build()
     object : Dns {
-      override fun lookup(hostname: String): List<InetAddress> =
-        doh.lookup(originalHosts[hostname] ?: hostname)
+      override fun lookup(hostname: String): List<InetAddress> {
+        val nome = originalHosts[hostname] ?: hostname
+        val agora = System.currentTimeMillis()
+        cacheDns[nome]?.let { (quando, lista) -> if (agora - quando < DNS_VALE_MS) return lista }
+        val lista = try {
+          doh.lookup(nome)
+        } catch (e: Exception) {
+          // DoH fora do ar não pode derrubar o canal: usa o DNS do aparelho.
+          Dns.SYSTEM.lookup(nome)
+        }
+        if (lista.isNotEmpty()) cacheDns[nome] = agora to lista
+        return lista
+      }
     }
   }
 
@@ -125,6 +149,9 @@ object SaimoNetwork {
     OkHttpClientProvider.setOkHttpClientFactory(
       OkHttpClientFactory {
         OkHttpClientProvider.createClientBuilder()
+          // O vídeo e o app dividem este cliente: o limite padrão (5 por
+          // servidor) deixava o canal na fila atrás das buscas do guia.
+          .dispatcher(Dispatcher().apply { maxRequests = 128; maxRequestsPerHost = 32 })
           .dns(dns)
           .addInterceptor(playlistPathInterceptor)
           .addInterceptor(validHostInterceptor)

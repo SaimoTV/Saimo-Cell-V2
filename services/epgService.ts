@@ -646,7 +646,9 @@ async function fillGuiaDeTvGaps(): Promise<void> {
         return;
     }
 
-    await Promise.all(alvos.map(async ([appId, name]) => {
+    // No máximo 4 buscas ao mesmo tempo: uma por canal, todas juntas, entupiam a
+    // rede e o vídeo do canal ficava na fila atrás delas.
+    await emLotes(alvos, 4, async ([appId, name]) => {
         const slug = slugDe(name);
         if (!slug) return;
         const synthId = `gdt:${slug}`;
@@ -662,12 +664,24 @@ async function fillGuiaDeTvGaps(): Promise<void> {
         } catch {
             // Sem sorte desta vez; a próxima recarga tenta de novo.
         }
-    }));
+    });
 
     if (algumPreenchido) {
         console.log(`[EPG] guiadetv preencheu ${alvos.length} lacuna(s)`);
         notifyUpdate();
     }
+}
+
+/** Roda `fn` sobre os itens com no máximo `limite` execuções ao mesmo tempo. */
+async function emLotes<T>(itens: T[], limite: number, fn: (item: T) => Promise<void>): Promise<void> {
+    let proximo = 0;
+    const trabalhadores = Array.from({ length: Math.min(limite, itens.length) }, async () => {
+        while (proximo < itens.length) {
+            const item = itens[proximo++];
+            await fn(item);
+        }
+    });
+    await Promise.all(trabalhadores);
 }
 
 /**

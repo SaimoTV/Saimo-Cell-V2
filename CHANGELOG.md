@@ -2,6 +2,7 @@
 
 ## [Não publicado] — app sem listas
 
+- Canais: o vídeo ficava na fila de rede atrás do guia. O guia fazia uma busca por canal, todas ao mesmo tempo (agora no máximo 4), e o DNS de cada pedido ia ao DoH sem guardar resposta (agora cada nome é guardado por 5 minutos, com o DNS do aparelho como reserva). O cliente de rede também passou de 5 para 32 conexões por servidor. Medido no emulador com 4.758 canais: a versão anterior ficava carregando sem abrir nenhum canal; esta abre e aguenta 12 trocas seguidas.
 - Canais: trocar de canal várias vezes não deixa mais o player carregando para sempre. O player antigo sai de cena antes do novo abrir (uma conexão por canal, sem o endereço novo ser enviado ao player velho) e uma fonte que não abre nem dá erro em 15 s conta como queda: tenta de novo e desce para a próxima fonte.
 - Nenhuma lista no app: sem catálogo de canais embutido (`offiline.json`), sem tabelas de guia no código (guiadetv, feeds, Pluto), sem regra de seção pelo nome. Só dois endereços de fábrica (canais-saimo.pages.dev e filmes-saimo.pages.dev), ativos sem a pessoa digitar nada; em Ajustes > Listas dá para trocar, desligar (salvar vazio) e restaurar o padrão.
 - Lista desligada: a aba mostra o estado vazio com atalho para Ajustes e nenhum pedido de rede para listas é feito.
